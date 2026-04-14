@@ -6,6 +6,22 @@ import { Download, Trash2, Loader2, Trophy, Smartphone, ChevronRight, BarChart2,
 import { exportReportToPDF } from '../components/PDFExport';
 import ReportSection from '../components/ReportSection';
 
+// Helper: apps_analyzed is stored as a string in DB e.g. "Instagram, Zomato"
+// This converts it to a consistent array format
+function parseAppsAnalyzed(apps_analyzed) {
+  if (!apps_analyzed) return [];
+  if (Array.isArray(apps_analyzed)) return apps_analyzed;
+  if (typeof apps_analyzed === 'string') {
+    return apps_analyzed.split(', ').map(name => ({ name, icon: null, platform: null, country: null }));
+  }
+  return [];
+}
+
+function getAppsLabel(apps_analyzed) {
+  const apps = parseAppsAnalyzed(apps_analyzed);
+  return apps.map(a => a.name).join(' vs ');
+}
+
 export default function HistoryPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -109,73 +125,76 @@ export default function HistoryPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* History list */}
           <div className="lg:col-span-1 space-y-2">
-            {history.map((entry) => (
-              <div
-                key={entry.id}
-                onClick={() => setSelectedEntry(selectedEntry?.id === entry.id ? null : entry)}
-                className={`card-hover p-4 cursor-pointer transition-all ${selectedEntry?.id === entry.id ? 'border-brand-300 bg-brand-50/30' : ''}`}
-              >
-                {/* App icons */}
-                <div className="flex items-center gap-1.5 mb-2.5">
-                  {(entry.apps_analyzed || []).map((app, i) => (
-                    app.icon ? (
-                      <img key={i} src={app.icon} alt={app.name} className="w-8 h-8 rounded-lg object-cover" />
-                    ) : (
-                      <div key={i} className="w-8 h-8 rounded-lg bg-surface-100 flex items-center justify-center">
-                        <Smartphone size={13} className="text-slate-400" />
-                      </div>
-                    )
-                  ))}
-                  <span className="text-xs text-slate-400 ml-0.5">{entry.app_count} app{entry.app_count !== 1 ? 's' : ''}</span>
-                  {entry.country && (
-                    <span className="text-xs text-slate-400 ml-auto">{entry.country.toUpperCase()}</span>
-                  )}
-                </div>
+            {history.map((entry) => {
+              const appsList = parseAppsAnalyzed(entry.apps_analyzed);
+              return (
+                <div
+                  key={entry.id}
+                  onClick={() => setSelectedEntry(selectedEntry?.id === entry.id ? null : entry)}
+                  className={`card-hover p-4 cursor-pointer transition-all ${selectedEntry?.id === entry.id ? 'border-brand-300 bg-brand-50/30' : ''}`}
+                >
+                  {/* App icons */}
+                  <div className="flex items-center gap-1.5 mb-2.5">
+                    {appsList.map((app, i) => (
+                      app.icon ? (
+                        <img key={i} src={app.icon} alt={app.name} className="w-8 h-8 rounded-lg object-cover" />
+                      ) : (
+                        <div key={i} className="w-8 h-8 rounded-lg bg-surface-100 flex items-center justify-center">
+                          <Smartphone size={13} className="text-slate-400" />
+                        </div>
+                      )
+                    ))}
+                    <span className="text-xs text-slate-400 ml-0.5">{entry.app_count} app{entry.app_count !== 1 ? 's' : ''}</span>
+                    {entry.country && (
+                      <span className="text-xs text-slate-400 ml-auto">{entry.country.toUpperCase()}</span>
+                    )}
+                  </div>
 
-                {/* App names */}
-                <p className="text-xs font-semibold text-slate-700 mb-1 truncate">
-                  {(entry.apps_analyzed || []).map(a => a.name).join(' vs ')}
-                </p>
-
-                {/* Winner */}
-                {entry.winner && (
-                  <p className="text-xs text-amber-700 mb-2 flex items-center gap-1">
-                    <Trophy size={10} className="flex-shrink-0" />
-                    {entry.winner} ranked first
+                  {/* App names */}
+                  <p className="text-xs font-semibold text-slate-700 mb-1 truncate">
+                    {getAppsLabel(entry.apps_analyzed)}
                   </p>
-                )}
 
-                {/* Date + actions */}
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-400">{formatDate(entry.created_at)}</span>
-                  <div className="flex items-center gap-0.5">
-                    <button
-                      onClick={(e) => handleExport(entry, e)}
-                      disabled={exportingId === entry.id}
-                      title="Download PDF"
-                      className="p-1.5 hover:bg-brand-50 hover:text-brand-600 rounded-lg transition-colors text-slate-400"
-                    >
-                      {exportingId === entry.id
-                        ? <Loader2 size={13} className="animate-spin" />
-                        : <Download size={13} />
-                      }
-                    </button>
-                    <button
-                      onClick={(e) => handleDelete(entry.id, e)}
-                      disabled={deletingId === entry.id}
-                      title="Delete"
-                      className="p-1.5 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors text-slate-400"
-                    >
-                      {deletingId === entry.id
-                        ? <Loader2 size={13} className="animate-spin" />
-                        : <Trash2 size={13} />
-                      }
-                    </button>
-                    <ChevronRight size={13} className={`text-slate-300 transition-transform ${selectedEntry?.id === entry.id ? 'rotate-90' : ''}`} />
+                  {/* Winner */}
+                  {entry.winner && (
+                    <p className="text-xs text-amber-700 mb-2 flex items-center gap-1">
+                      <Trophy size={10} className="flex-shrink-0" />
+                      {entry.winner} ranked first
+                    </p>
+                  )}
+
+                  {/* Date + actions */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400">{formatDate(entry.created_at)}</span>
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        onClick={(e) => handleExport(entry, e)}
+                        disabled={exportingId === entry.id}
+                        title="Download PDF"
+                        className="p-1.5 hover:bg-brand-50 hover:text-brand-600 rounded-lg transition-colors text-slate-400"
+                      >
+                        {exportingId === entry.id
+                          ? <Loader2 size={13} className="animate-spin" />
+                          : <Download size={13} />
+                        }
+                      </button>
+                      <button
+                        onClick={(e) => handleDelete(entry.id, e)}
+                        disabled={deletingId === entry.id}
+                        title="Delete"
+                        className="p-1.5 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors text-slate-400"
+                      >
+                        {deletingId === entry.id
+                          ? <Loader2 size={13} className="animate-spin" />
+                          : <Trash2 size={13} />
+                        }
+                      </button>
+                      <ChevronRight size={13} className={`text-slate-300 transition-transform ${selectedEntry?.id === entry.id ? 'rotate-90' : ''}`} />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-2 pt-2">
@@ -197,7 +216,7 @@ export default function HistoryPage() {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className="text-sm font-semibold text-slate-700">
-                      {(selectedEntry.apps_analyzed || []).map(a => a.name).join(' vs ')}
+                      {getAppsLabel(selectedEntry.apps_analyzed)}
                     </p>
                     <p className="text-xs text-slate-400">{formatDate(selectedEntry.created_at)}</p>
                   </div>
@@ -212,12 +231,7 @@ export default function HistoryPage() {
                     }
                   </button>
                 </div>
-                <ReportSection
-                  report={selectedEntry.report}
-                  apps={selectedEntry.apps_analyzed?.map(a => ({
-                    name: a.name, icon: a.icon, platform: a.platform, country: a.country
-                  }))}
-                />
+                <ReportSection report={selectedEntry.report} />
               </div>
             ) : (
               <div className="h-64 flex items-center justify-center border-2 border-dashed border-surface-200 rounded-2xl">
