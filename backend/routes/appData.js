@@ -39,6 +39,25 @@ function extractAndroidId(url) {
   return match ? match[1] : null;
 }
 
+// Helper: delay
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Helper: retry wrapper for Android calls
+async function withRetry(fn, retries = 2, delayMs = 800) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      console.warn(`[Android] Attempt ${attempt + 1} failed: ${err.message}`);
+      if (attempt < retries) {
+        await delay(delayMs * (attempt + 1)); // exponential backoff: 800ms, 1600ms
+      } else {
+        throw err;
+      }
+    }
+  }
+}
+
 async function searchiOSMultiple(query, country = 'us', limit = 6) {
   try {
     const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=software&limit=${limit}&country=${country}`;
@@ -64,7 +83,15 @@ async function searchiOSMultiple(query, country = 'us', limit = 6) {
 
 async function searchAndroidMultiple(query, country = 'us', limit = 6) {
   try {
-    const results = await gplay.search({ term: query, num: limit, country, lang: 'en' });
+    const results = await withRetry(() =>
+      gplay.search({
+        term: query,
+        num: limit,
+        country,
+        lang: 'en',
+        throttle: 10, // max 10 requests per second
+      })
+    );
     return (results || []).map(app => ({
       appId: app.appId,
       title: app.title,
@@ -78,7 +105,7 @@ async function searchAndroidMultiple(query, country = 'us', limit = 6) {
       installs: app.installs || '',
     }));
   } catch (err) {
-    console.error('Android autocomplete error:', err);
+    console.error('Android autocomplete error:', err.message);
     return [];
   }
 }
@@ -98,10 +125,17 @@ async function fetchiOSById(appId, country = 'us') {
 
 async function fetchAndroidById(appId, country = 'us') {
   try {
-    const app = await gplay.app({ appId, country, lang: 'en' });
+    const app = await withRetry(() =>
+      gplay.app({
+        appId,
+        country,
+        lang: 'en',
+        throttle: 10,
+      })
+    );
     return formatAndroidApp(app, country);
   } catch (err) {
-    console.error('Android fetch error:', err);
+    console.error('Android fetch error:', err.message);
     return null;
   }
 }
