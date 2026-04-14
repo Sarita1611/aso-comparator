@@ -32,7 +32,7 @@ async function callGroq(systemPrompt, userPrompt) {
       { role: 'user', content: userPrompt }
     ],
     temperature: 0.15,
-    max_tokens: 8000,
+    max_tokens: 6000,
   });
   const text = completion.choices?.[0]?.message?.content;
   if (!text) throw new Error('Empty response from Groq');
