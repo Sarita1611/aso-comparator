@@ -23,15 +23,16 @@ const COUNTRY_NAMES = {
   'hk': 'Hong Kong', 'kz': 'Kazakhstan', 'ma': 'Morocco', 'ke': 'Kenya'
 };
 
-// Call Gemini as fallback
+// Call Gemini as fallback - tries gemini-2.0-flash first, then gemini-1.0-pro
 async function callGemini(systemPrompt, userPrompt) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not set');
 
   const prompt = `${systemPrompt}\n\n${userPrompt}`;
 
-  // Try gemini-2.0-flash first
+  // Try gemini-2.0-flash first (v1beta endpoint)
   try {
+    console.log('[Gemini] Trying gemini-2.0-flash...');
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       {
@@ -44,15 +45,17 @@ async function callGemini(systemPrompt, userPrompt) {
       }
     );
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || 'Gemini 2.0 error');
+    if (!res.ok) throw new Error(data.error?.message || 'Gemini 2.0-flash error');
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new Error('Empty response from Gemini 2.0');
+    if (!text) throw new Error('Empty response from gemini-2.0-flash');
+    console.log('[Gemini] gemini-2.0-flash succeeded');
     return text;
   } catch (err) {
     console.warn('[Gemini] gemini-2.0-flash failed, trying gemini-1.0-pro:', err.message);
   }
 
-  // Fallback to gemini-1.0-pro
+  // Fallback to gemini-1.0-pro (v1 endpoint)
+  console.log('[Gemini] Trying gemini-1.0-pro...');
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent?key=${apiKey}`,
     {
@@ -65,8 +68,11 @@ async function callGemini(systemPrompt, userPrompt) {
     }
   );
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message || 'Gemini 1.0 error');
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  if (!res.ok) throw new Error(data.error?.message || 'Gemini 1.0-pro error');
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('Empty response from gemini-1.0-pro');
+  console.log('[Gemini] gemini-1.0-pro succeeded');
+  return text;
 }
 
 function buildDetailedAnalysisPrompt(knowledge, country, appsData) {
@@ -316,7 +322,7 @@ router.post('/compare', async (req, res) => {
     }
 
     // Parse JSON response
-    const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
+    const jsonMatch = analysisText.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
     if (!jsonMatch) {
       throw new Error('Could not extract JSON from response');
     }
