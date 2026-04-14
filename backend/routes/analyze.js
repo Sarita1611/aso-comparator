@@ -23,27 +23,41 @@ const COUNTRY_NAMES = {
   'hk': 'Hong Kong', 'kz': 'Kazakhstan', 'ma': 'Morocco', 'ke': 'Kenya'
 };
 
-// Call Gemini as fallback - tries gemini-2.0-flash first, then gemini-1.0-pro
+// Call Groq correctly using the client instance
+async function callGroq(systemPrompt, userPrompt) {
+  const completion = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ],
+    temperature: 0.15,
+    max_tokens: 8000,
+  });
+  const text = completion.choices?.[0]?.message?.content;
+  if (!text) throw new Error('Empty response from Groq');
+  return text;
+}
+
+// Call Gemini as fallback - tries gemini-2.0-flash first, then gemini-2.0-flash-lite
 async function callGemini(systemPrompt, userPrompt) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not set');
 
   const prompt = `${systemPrompt}\n\n${userPrompt}`;
+  const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-  // Try gemini-2.0-flash first (v1beta endpoint)
+  // Try gemini-2.0-flash first
   try {
     console.log('[Gemini] Trying gemini-2.0-flash...');
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.15, maxOutputTokens: 8000 }
-        })
-      }
-    );
+    const res = await fetch(`${BASE}/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.15, maxOutputTokens: 8000 }
+      })
+    });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || 'Gemini 2.0-flash error');
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -51,27 +65,24 @@ async function callGemini(systemPrompt, userPrompt) {
     console.log('[Gemini] gemini-2.0-flash succeeded');
     return text;
   } catch (err) {
-    console.warn('[Gemini] gemini-2.0-flash failed, trying gemini-1.0-pro:', err.message);
+    console.warn('[Gemini] gemini-2.0-flash failed, trying gemini-2.0-flash-lite:', err.message);
   }
 
-  // Fallback to gemini-1.0-pro (v1 endpoint)
-  console.log('[Gemini] Trying gemini-1.0-pro...');
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.15, maxOutputTokens: 8000 }
-      })
-    }
-  );
+  // Fallback to gemini-2.0-flash-lite
+  console.log('[Gemini] Trying gemini-2.0-flash-lite...');
+  const res = await fetch(`${BASE}/gemini-2.0-flash-lite:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.15, maxOutputTokens: 8000 }
+    })
+  });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message || 'Gemini 1.0-pro error');
+  if (!res.ok) throw new Error(data.error?.message || 'Gemini flash-lite error');
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Empty response from gemini-1.0-pro');
-  console.log('[Gemini] gemini-1.0-pro succeeded');
+  if (!text) throw new Error('Empty response from gemini-2.0-flash-lite');
+  console.log('[Gemini] gemini-2.0-flash-lite succeeded');
   return text;
 }
 
@@ -97,10 +108,10 @@ Price: ${app.price}
 ${appsSummary}
 
 ASO KNOWLEDGE:
-${knowledge}
+${knowledge || 'Use your expert ASO knowledge to analyze these apps.'}
 
 CRITICAL REQUIREMENTS:
-1. Return ONLY valid JSON - no markdown, no explanations, start with {
+1. Return ONLY valid JSON - no markdown, no explanations, start with [
 2. All scores must be 0-100 numbers
 3. Be extremely specific - quote actual text, give exact character counts
 4. Include detailed strategic analysis with actionable recommendations
@@ -109,57 +120,55 @@ CRITICAL REQUIREMENTS:
 7. Provide specific keyword suggestions with difficulty levels
 8. Give detailed scoring breakdowns for each dimension
 
-Generate JSON with this EXACT structure for each app:
+Return a JSON ARRAY with one object per app. Each object must have this structure:
 
 {
   "overview": {
-    "influenceStrength": <0-100 influence score>,
-    "summary": "<detailed 2-3 sentence executive summary>",
+    "influenceStrength": <0-100>,
+    "summary": "<2-3 sentence executive summary>",
     "creativeStrategy": <0-100>,
     "designVisuals": <0-100>,
     "marketFit": <0-100>,
     "differentiation": <0-100>,
     "performance": <0-100>,
     "overallScore": <0-100>,
-    "keyStrengths": ["<specific strength with metric>", "<specific strength with metric>", "<specific strength with metric>"],
-    "keyWeaknesses": ["<specific weakness with metric>", "<specific weakness with metric>", "<specific weakness with metric>"]
+    "keyStrengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
+    "keyWeaknesses": ["<weakness 1>", "<weakness 2>", "<weakness 3>"]
   },
-  
   "appText": {
     "overallTextScore": <0-10>,
     "uniqueness": <0-100>,
-    "strategicAssessment": "<detailed 3-4 sentence analysis of the text strategy>",
+    "strategicAssessment": "<3-4 sentence analysis>",
     "title": {
       "score": <0-10>,
-      "currentValue": "<actual title from app>",
+      "currentValue": "<actual title>",
       "length": "<X/30 characters>",
       "utilization": "<percentage>%",
-      "primaryKeywords": ["<keyword1>", "<keyword2>", "<keyword3>"],
-      "strengths": ["<specific strength>", "<specific strength>"],
-      "weaknesses": ["<specific weakness if any>"],
-      "suggestions": ["<specific suggested improvement with example>"]
+      "primaryKeywords": ["<kw1>", "<kw2>"],
+      "strengths": ["<strength>"],
+      "weaknesses": ["<weakness>"],
+      "suggestions": ["<suggestion>"]
     },
     "subtitle": {
       "score": <0-10>,
-      "currentValue": "<actual subtitle or MISSING>",
+      "currentValue": "<subtitle or MISSING>",
       "length": "<X/30 characters>",
       "utilization": "<percentage>%",
-      "strengths": ["<specific strength>"],
-      "weaknesses": ["<specific weakness>"],
-      "suggestions": ["<specific suggested improvement with example>"]
+      "strengths": ["<strength>"],
+      "weaknesses": ["<weakness>"],
+      "suggestions": ["<suggestion>"]
     },
     "description": {
       "score": <0-10>,
       "length": "<X/4000 characters>",
       "utilization": "<percentage>%",
-      "openingLine": "<first sentence quoted>",
-      "keywordDensity": "<X appearances in Y chars = Z%>",
-      "strengths": ["<specific strength>", "<specific strength>"],
-      "weaknesses": ["<specific weakness>", "<specific weakness>"],
-      "suggestions": ["<specific improvement with quote>", "<specific improvement with quote>"]
+      "openingLine": "<first sentence>",
+      "keywordDensity": "<X% density>",
+      "strengths": ["<strength>"],
+      "weaknesses": ["<weakness>"],
+      "suggestions": ["<suggestion>"]
     }
   },
-  
   "creativeScoring": {
     "categoryRadar": {
       "strategy": <0-100>,
@@ -181,41 +190,39 @@ Generate JSON with this EXACT structure for each app:
       "featureLed": <count>
     },
     "conversionFunnelCoverage": {
-      "hook": <true/false>,
-      "features": <true/false>,
-      "socialProof": <true/false>,
-      "cta": <true/false>
+      "hook": true,
+      "features": true,
+      "socialProof": true,
+      "cta": true
     },
-    "analysis": "<detailed analysis of creative approach>"
+    "analysis": "<creative approach analysis>"
   },
-  
   "screenshots": {
     "count": <number>,
-    "analysisNote": "<strategic overview of screenshot strategy>",
-    "strengths": ["<specific strength with count>", "<specific strength>"],
-    "weaknesses": ["<specific weakness>"],
+    "analysisNote": "<screenshot strategy overview>",
+    "strengths": ["<strength>"],
+    "weaknesses": ["<weakness>"],
     "screens": [
       {
         "number": 1,
-        "purpose": "<screen purpose/hook type>",
+        "purpose": "<purpose>",
         "clarity": <0-10>,
         "stopPower": <0-10>,
-        "keyElements": ["<element1>", "<element2>"],
-        "feedback": "<specific feedback>"
+        "keyElements": ["<element>"],
+        "feedback": "<feedback>"
       }
     ],
-    "suggestions": ["<specific improvement>", "<specific improvement>"]
+    "suggestions": ["<suggestion>"]
   },
-  
   "competitors": {
     "analysed": [
       {
-        "name": "<competitor app name>",
+        "name": "<competitor name>",
         "platform": "<ios|android>",
         "overallScore": <0-100>,
-        "positioning": "<competitor positioning strategy>",
-        "strengths": ["<specific strength>", "<specific strength>"],
-        "weaknesses": ["<specific weakness if applicable>"],
+        "positioning": "<positioning strategy>",
+        "strengths": ["<strength>"],
+        "weaknesses": ["<weakness>"],
         "dimensionScores": {
           "creativeStrategy": <0-100>,
           "designVisuals": <0-100>,
@@ -225,71 +232,53 @@ Generate JSON with this EXACT structure for each app:
         }
       }
     ],
-    "competitiveLandscape": "<2-3 sentence market analysis>"
+    "competitiveLandscape": "<market analysis>"
   },
-  
   "insights": {
     "topRecommendations": [
       {
-        "priority": "<CRITICAL|HIGH|MEDIUM>",
-        "category": "<HOOK|POSITIONING|MESSAGING|CREATIVE|KEYWORDS>",
-        "title": "<action title>",
-        "description": "<detailed description of what to do>",
-        "actionItems": ["<specific action step 1>", "<specific action step 2>"],
-        "expectedImpact": "<specific expected outcome with potential metrics>"
+        "priority": "CRITICAL",
+        "category": "KEYWORDS",
+        "title": "<title>",
+        "description": "<description>",
+        "actionItems": ["<action 1>", "<action 2>"],
+        "expectedImpact": "<expected outcome>"
       }
     ],
     "whitespaceOpportunities": [
       {
-        "title": "<opportunity title>",
-        "description": "<detailed opportunity description>",
-        "reasoning": "<why this is an opportunity>"
+        "title": "<opportunity>",
+        "description": "<description>",
+        "reasoning": "<why>"
       }
     ],
     "oversusedPatterns": [
       {
-        "pattern": "<pattern to avoid>",
-        "reason": "<why it's overused/ineffective>",
-        "alternative": "<what to do instead>"
+        "pattern": "<pattern>",
+        "reason": "<why bad>",
+        "alternative": "<alternative>"
       }
     ],
     "keywordAnalysis": {
-      "current": ["<keyword1>", "<keyword2>"],
-      "missed": ["<missed keyword1>", "<missed keyword2>"],
+      "current": ["<kw1>", "<kw2>"],
+      "missed": ["<kw1>", "<kw2>"],
       "suggested": [
         {
           "keyword": "<keyword>",
-          "difficulty": "<Low|Medium|High>",
-          "intent": "<user search intent>",
-          "whereToPlace": "<title|subtitle|description>",
-          "reasoning": "<why relevant for this app>"
+          "difficulty": "Low",
+          "intent": "<intent>",
+          "whereToPlace": "title",
+          "reasoning": "<why>"
         }
       ]
     },
     "roadmapActions": {
-      "week1": [
-        {
-          "action": "<specific action>",
-          "expectedOutcome": "<expected result>"
-        }
-      ],
-      "month1": [
-        {
-          "action": "<strategic action>",
-          "expectedOutcome": "<expected result>"
-        }
-      ],
-      "quarter1": [
-        {
-          "action": "<long-term strategic action>",
-          "expectedOutcome": "<expected result>"
-        }
-      ]
+      "week1": [{ "action": "<action>", "expectedOutcome": "<outcome>" }],
+      "month1": [{ "action": "<action>", "expectedOutcome": "<outcome>" }],
+      "quarter1": [{ "action": "<action>", "expectedOutcome": "<outcome>" }]
     }
   }
-}
-
-Return this structure as a JSON object for EACH app being analyzed. If multiple apps, return as array.`;
+}`;
 }
 
 // Main comparison analysis endpoint
@@ -301,38 +290,39 @@ router.post('/compare', async (req, res) => {
   }
 
   try {
-    // Get RAG knowledge
-    const knowledge = await getRelevantASOKnowledge(
-      apps.map(a => `${a.name} ${a.description}`).join(' '),
-      5
-    );
+    // Get RAG knowledge - pass apps array directly
+    let knowledge = null;
+    try {
+      knowledge = await getRelevantASOKnowledge(apps);
+    } catch (ragErr) {
+      console.warn('[Analyze] RAG failed, continuing without knowledge:', ragErr.message);
+    }
 
-    // Build detailed prompt
+    // Build prompt
     const systemPrompt = buildDetailedAnalysisPrompt(knowledge, country, apps);
-    const userPrompt = `Analyze these ${apps.length} apps and provide detailed ASO insights.`;
+    const userPrompt = `Analyze these ${apps.length} apps and return a JSON array with one detailed analysis object per app.`;
 
     let analysisText = '';
     try {
-      // Try Groq first
       console.log('[Analyze] Calling Groq for detailed analysis...');
-      analysisText = await groq(systemPrompt, userPrompt);
+      analysisText = await callGroq(systemPrompt, userPrompt);
+      console.log('[Analyze] Groq succeeded');
     } catch (groqError) {
       console.warn('[Analyze] Groq failed, falling back to Gemini:', groqError.message);
       analysisText = await callGemini(systemPrompt, userPrompt);
     }
 
-    // Parse JSON response
-    const jsonMatch = analysisText.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+    // Strip markdown fences and parse JSON
+    const cleaned = analysisText.replace(/```json|```/g, '').trim();
+    const jsonMatch = cleaned.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error('Could not extract JSON from response');
+      throw new Error('Could not extract JSON from AI response');
     }
 
     const analysisData = JSON.parse(jsonMatch[0]);
-
-    // Normalize to array if single object
     const analysisArray = Array.isArray(analysisData) ? analysisData : [analysisData];
 
-    // Ensure each app has analysis
+    // Build final report
     const report = {
       apps: apps.map((app, idx) => ({
         ...app,
@@ -345,22 +335,25 @@ router.post('/compare', async (req, res) => {
       }
     };
 
-    // Save to history if userId provided
+    // Save to history
     if (userId) {
+      const winner = analysisArray.length > 1
+        ? (analysisArray[0]?.overview?.overallScore >= (analysisArray[1]?.overview?.overallScore || 0)
+          ? apps[0].name : apps[1].name)
+        : apps[0].name;
+
       const { error: saveError } = await supabase
         .from('analysis_history')
         .insert({
           user_id: userId,
           apps_analyzed: apps.map(a => a.name).join(', '),
-          report: report,
+          report,
           app_count: apps.length,
-          winner: analysisArray[0]?.overview?.overallScore > (analysisArray[1]?.overview?.overallScore || 0) ? apps[0].name : apps[1]?.name,
+          winner,
           country
         });
 
-      if (saveError) {
-        console.error('[Analyze] Save history error:', saveError);
-      }
+      if (saveError) console.error('[Analyze] Save history error:', saveError);
     }
 
     res.json({ success: true, report });
