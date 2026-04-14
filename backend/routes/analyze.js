@@ -28,22 +28,44 @@ async function callGemini(systemPrompt, userPrompt) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not set');
 
+  const prompt = `${systemPrompt}\n\n${userPrompt}`;
+
+  // Try gemini-2.0-flash first
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.15, maxOutputTokens: 8000 }
+        })
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || 'Gemini 2.0 error');
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error('Empty response from Gemini 2.0');
+    return text;
+  } catch (err) {
+    console.warn('[Gemini] gemini-2.0-flash failed, trying gemini-1.0-pro:', err.message);
+  }
+
+  // Fallback to gemini-1.0-pro
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{
-          parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }]
-        }],
+        contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.15, maxOutputTokens: 8000 }
       })
     }
   );
-
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message || 'Gemini API error');
+  if (!res.ok) throw new Error(data.error?.message || 'Gemini 1.0 error');
   return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
