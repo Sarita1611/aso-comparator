@@ -132,7 +132,8 @@ async function searchAndroidMultiple(query, country = 'us', limit = 6) {
       body: JSON.stringify({ keyword: query }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'RapidAPI search error');
+    console.log('[Android] RapidAPI response:', JSON.stringify(data));
+    if (!res.ok) throw new Error(JSON.stringify(data));
     const results = data.data || [];
     return results.slice(0, limit).map(app => ({
       appId: app.package_name,
