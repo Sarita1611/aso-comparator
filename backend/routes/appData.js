@@ -4,6 +4,10 @@ import gplay from 'google-play-scraper';
 
 const router = express.Router();
 
+const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
+const RAPIDAPI_HOST = 'google-play-store-api-scrape-apps-data.p.rapidapi.com';
+const RAPIDAPI_BASE = 'https://google-play-store-api-scrape-apps-data.p.rapidapi.com/googleplay';
+
 export const COUNTRY_CODES = {
   'United States': 'us', 'United Kingdom': 'gb', 'India': 'in', 'Canada': 'ca',
   'Australia': 'au', 'Germany': 'de', 'France': 'fr', 'Japan': 'jp',
@@ -39,24 +43,7 @@ function extractAndroidId(url) {
   return match ? match[1] : null;
 }
 
-// Helper: delay
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Helper: retry wrapper for Android calls
-async function withRetry(fn, retries = 2, delayMs = 800) {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      console.warn(`[Android] Attempt ${attempt + 1} failed: ${err.message}`);
-      if (attempt < retries) {
-        await delay(delayMs * (attempt + 1)); // exponential backoff: 800ms, 1600ms
-      } else {
-        throw err;
-      }
-    }
-  }
-}
+// ─── iOS functions (unchanged) ───────────────────────────────────────────────
 
 async function searchiOSMultiple(query, country = 'us', limit = 6) {
   try {
@@ -81,35 +68,6 @@ async function searchiOSMultiple(query, country = 'us', limit = 6) {
   }
 }
 
-async function searchAndroidMultiple(query, country = 'us', limit = 6) {
-  try {
-    const results = await withRetry(() =>
-      gplay.search({
-        term: query,
-        num: limit,
-        country,
-        lang: 'en',
-        throttle: 10, // max 10 requests per second
-      })
-    );
-    return (results || []).map(app => ({
-      appId: app.appId,
-      title: app.title,
-      developer: app.developer,
-      icon: app.icon,
-      platform: 'android',
-      score: app.score ? parseFloat(app.score.toFixed(1)) : 0,
-      ratingCount: app.ratings || 0,
-      category: app.genre || '',
-      free: app.free,
-      installs: app.installs || '',
-    }));
-  } catch (err) {
-    console.error('Android autocomplete error:', err.message);
-    return [];
-  }
-}
-
 async function fetchiOSById(appId, country = 'us') {
   try {
     const url = `https://itunes.apple.com/lookup?id=${appId}&country=${country}`;
@@ -119,23 +77,6 @@ async function fetchiOSById(appId, country = 'us') {
     return formatIOSApp(data.results[0], country);
   } catch (err) {
     console.error('iOS fetch error:', err);
-    return null;
-  }
-}
-
-async function fetchAndroidById(appId, country = 'us') {
-  try {
-    const app = await withRetry(() =>
-      gplay.app({
-        appId,
-        country,
-        lang: 'en',
-        throttle: 10,
-      })
-    );
-    return formatAndroidApp(app, country);
-  } catch (err) {
-    console.error('Android fetch error:', err.message);
     return null;
   }
 }
@@ -172,38 +113,103 @@ function formatIOSApp(app, country = 'us') {
   };
 }
 
-function formatAndroidApp(app, country = 'us') {
-  const releaseDate = new Date(app.updated || Date.now());
-  const daysSinceUpdate = Math.floor((Date.now() - releaseDate.getTime()) / (1000 * 60 * 60 * 24));
+// ─── Android via RapidAPI ─────────────────────────────────────────────────────
+
+async function searchAndroidMultiple(query, country = 'us', limit = 6) {
+  if (!RAPIDAPI_KEY) {
+    console.error('[Android] RAPIDAPI_KEY not set');
+    return [];
+  }
+  try {
+    console.log(`[Android] Searching RapidAPI for: ${query}`);
+    const res = await fetch(`${RAPIDAPI_BASE}/search`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-rapidapi-host': RAPIDAPI_HOST,
+        'x-rapidapi-key': RAPIDAPI_KEY,
+      },
+      body: JSON.stringify({ keyword: query }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'RapidAPI search error');
+    const results = data.data || [];
+    return results.slice(0, limit).map(app => ({
+      appId: app.package_name,
+      title: app.title,
+      developer: app.developer,
+      icon: app.icon,
+      platform: 'android',
+      score: app.rating ? parseFloat(parseFloat(app.rating).toFixed(1)) : 0,
+      ratingCount: app.reviews || 0,
+      category: app.category || '',
+      free: !app.price || app.price === '0' || app.price === 'Free',
+      installs: app.downloads || '',
+    }));
+  } catch (err) {
+    console.error('[Android] Search error:', err.message);
+    return [];
+  }
+}
+
+async function fetchAndroidById(appId, country = 'us') {
+  if (!RAPIDAPI_KEY) {
+    console.error('[Android] RAPIDAPI_KEY not set');
+    return null;
+  }
+  try {
+    console.log(`[Android] Fetching RapidAPI details for: ${appId}`);
+    const res = await fetch(`${RAPIDAPI_BASE}/details`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-rapidapi-host': RAPIDAPI_HOST,
+        'x-rapidapi-key': RAPIDAPI_KEY,
+      },
+      body: JSON.stringify({ package_name: appId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'RapidAPI details error');
+    const app = data.data?.[0];
+    if (!app) return null;
+    return formatAndroidAppFromRapidAPI(app, country);
+  } catch (err) {
+    console.error('[Android] Fetch error:', err.message);
+    return null;
+  }
+}
+
+function formatAndroidAppFromRapidAPI(app, country = 'us') {
   return {
     platform: 'android',
     country,
     name: app.title || '',
     developer: app.developer || '',
     icon: app.icon || '',
-    rating: app.score ? parseFloat(app.score.toFixed(1)) : 0,
-    ratingCount: app.ratings || 0,
-    category: app.genre || '',
-    description: app.description || '',
+    rating: app.rating ? parseFloat(parseFloat(app.rating).toFixed(1)) : 0,
+    ratingCount: app.reviews || 0,
+    category: app.category || '',
+    description: app.description_long || app.description_short || '',
     title: app.title || '',
-    subtitle: app.summary || '',
-    price: app.free ? 'Free' : `$${app.price}`,
+    subtitle: app.description_short || '',
+    price: (!app.price || app.price === '0') ? 'Free' : `$${app.price}`,
     screenshotCount: (app.screenshots || []).length,
     screenshots: app.screenshots || [],
     version: app.version || '',
-    lastUpdated: releaseDate.toISOString().split('T')[0],
-    daysSinceUpdate,
+    lastUpdated: app.updated || '',
+    daysSinceUpdate: 0,
     size: app.size || 'N/A',
-    url: app.url || '',
-    bundleId: app.appId || '',
-    hasVideo: !!(app.video),
-    videoUrl: app.video || '',
-    installs: app.installs || '',
-    contentRating: app.contentRating || '',
-    recentChanges: app.recentChanges || '',
-    appId: app.appId || '',
+    url: `https://play.google.com/store/apps/details?id=${app.package_name}`,
+    bundleId: app.package_name || '',
+    hasVideo: false,
+    installs: app.downloads || '',
+    contentRating: app.content_rating || '',
+    recentChanges: app.recent_changes || '',
+    appId: app.package_name || '',
   };
 }
+
+// ─── Routes ───────────────────────────────────────────────────────────────────
 
 // AUTOCOMPLETE
 router.post('/search', async (req, res) => {
