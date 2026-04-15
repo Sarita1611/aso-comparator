@@ -1,5 +1,6 @@
 import express from 'express';
 import groq from '../lib/groq.js';
+import openai from '../lib/openai.js';
 import { getRelevantASOKnowledge } from '../lib/rag.js';
 import supabase from '../lib/supabase.js';
 import fetch from 'node-fetch';
@@ -22,6 +23,21 @@ const COUNTRY_NAMES = {
   'ro': 'Romania', 'ua': 'Ukraine', 'gr': 'Greece', 'tw': 'Taiwan',
   'hk': 'Hong Kong', 'kz': 'Kazakhstan', 'ma': 'Morocco', 'ke': 'Kenya'
 };
+
+async function callOpenAI(systemPrompt, userPrompt) {
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4.5-preview',   // current API model string for GPT-5 — update if OpenAI changes it
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ],
+    temperature: 0.15,
+    max_tokens: 16000,
+  });
+  const text = completion.choices?.[0]?.message?.content;
+  if (!text) throw new Error('Empty response from OpenAI');
+  return text;
+}
 
 // Call Groq correctly using the client instance
 async function callGroq(systemPrompt, userPrompt) {
@@ -302,14 +318,20 @@ router.post('/compare', async (req, res) => {
     const systemPrompt = buildDetailedAnalysisPrompt(knowledge, country, apps);
     const userPrompt = `Analyze these ${apps.length} apps and return a JSON array with one detailed analysis object per app.`;
 
+    // NEW — OpenAI primary, Groq fallback
     let analysisText = '';
     try {
-      console.log('[Analyze] Calling Groq for detailed analysis...');
-      analysisText = await callGroq(systemPrompt, userPrompt);
-      console.log('[Analyze] Groq succeeded');
-    } catch (groqError) {
-      console.warn('[Analyze] Groq failed, falling back to Gemini:', groqError.message);
-      analysisText = await callGemini(systemPrompt, userPrompt);
+      console.log('[Analyze] Calling OpenAI for detailed analysis...');
+      analysisText = await callOpenAI(systemPrompt, userPrompt);
+      console.log('[Analyze] OpenAI succeeded');
+    } catch (openaiError) {
+      console.warn('[Analyze] OpenAI failed, falling back to Groq:', openaiError.message);
+      try {
+        analysisText = await callGroq(systemPrompt, userPrompt);
+        console.log('[Analyze] Groq fallback succeeded');
+      } catch (groqError) {
+        throw new Error(`Both OpenAI and Groq failed. Last error: ${groqError.message}`);
+      }
     }
 
     // Strip markdown fences and parse JSON
