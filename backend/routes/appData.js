@@ -1,12 +1,11 @@
 import express from 'express';
 import fetch from 'node-fetch';
-import gplay from 'google-play-scraper';
 
 const router = express.Router();
 
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
-const RAPIDAPI_HOST = 'google-play-store-api-scrape-apps-data.p.rapidapi.com';
-const RAPIDAPI_BASE = 'https://google-play-store-api-scrape-apps-data.p.rapidapi.com/googleplay';
+const RAPIDAPI_HOST = 'google-play-store-scraper-api.p.rapidapi.com';
+const RAPIDAPI_BASE = 'https://google-play-store-scraper-api.p.rapidapi.com';
 
 export const COUNTRY_CODES = {
   'United States': 'us', 'United Kingdom': 'gb', 'India': 'in', 'Canada': 'ca',
@@ -43,7 +42,7 @@ function extractAndroidId(url) {
   return match ? match[1] : null;
 }
 
-// ─── iOS functions (unchanged) ───────────────────────────────────────────────
+// ─── iOS functions ────────────────────────────────────────────────────────────
 
 async function searchiOSMultiple(query, country = 'us', limit = 6) {
   try {
@@ -113,7 +112,28 @@ function formatIOSApp(app, country = 'us') {
   };
 }
 
-// ─── Android via RapidAPI ─────────────────────────────────────────────────────
+// ─── Android via rockapis ─────────────────────────────────────────────────────
+
+// rockapis has no direct score field — calculate weighted average from ratingsHistogram
+function getRating(app) {
+  const h = app.ratingsHistogram;
+  if (h) {
+    const s1 = h['1'] || 0;
+    const s2 = h['2'] || 0;
+    const s3 = h['3'] || 0;
+    const s4 = h['4'] || 0;
+    const s5 = h['5'] || 0;
+    const total = s1 + s2 + s3 + s4 + s5;
+    if (total > 0) {
+      const weighted = s1 * 1 + s2 * 2 + s3 * 3 + s4 * 4 + s5 * 5;
+      return parseFloat((weighted / total).toFixed(1));
+    }
+  }
+  // fallback in case API adds a score field later
+  const val = app.score ?? app.rating ?? null;
+  if (val !== null && val !== undefined) return parseFloat(parseFloat(val).toFixed(1));
+  return 0;
+}
 
 async function searchAndroidMultiple(query, country = 'us', limit = 6) {
   if (!RAPIDAPI_KEY) {
@@ -121,31 +141,31 @@ async function searchAndroidMultiple(query, country = 'us', limit = 6) {
     return [];
   }
   try {
-    console.log(`[Android] Searching RapidAPI for: ${query}`);
-    const res = await fetch(`${RAPIDAPI_BASE}/search`, {
+    console.log(`[Android] Searching rockapis for: ${query}`);
+    const res = await fetch(`${RAPIDAPI_BASE}/search-apps`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-rapidapi-host': RAPIDAPI_HOST,
         'x-rapidapi-key': RAPIDAPI_KEY,
       },
-      body: JSON.stringify({ keyword: query }),
+      body: JSON.stringify({ keyword: query, language: 'en', country }),
     });
     const data = await res.json();
-    console.log('[Android] RapidAPI response:', JSON.stringify(data));
+    console.log('[Android] Search status:', res.status, '| result count:', (data.data || []).length);
     if (!res.ok) throw new Error(JSON.stringify(data));
     const results = data.data || [];
     return results.slice(0, limit).map(app => ({
-      appId: app.package_name,
+      appId: app.id,
       title: app.title,
       developer: app.developer,
       icon: app.icon,
       platform: 'android',
-      score: app.rating ? parseFloat(parseFloat(app.rating).toFixed(1)) : 0,
-      ratingCount: app.reviews || 0,
-      category: app.category || '',
-      free: !app.price || app.price === '0' || app.price === 'Free',
-      installs: app.downloads || '',
+      score: getRating(app),
+      ratingCount: app.ratings || 0,
+      category: app.genre || app.familyGenre || '',
+      free: app.free ?? (app.price?.value === 0),
+      installs: app.installs || '',
     }));
   } catch (err) {
     console.error('[Android] Search error:', err.message);
@@ -159,54 +179,60 @@ async function fetchAndroidById(appId, country = 'us') {
     return null;
   }
   try {
-    console.log(`[Android] Fetching RapidAPI details for: ${appId}`);
-    const res = await fetch(`${RAPIDAPI_BASE}/details`, {
+    console.log(`[Android] Fetching rockapis details for: ${appId}`);
+    const res = await fetch(`${RAPIDAPI_BASE}/app-details`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-rapidapi-host': RAPIDAPI_HOST,
         'x-rapidapi-key': RAPIDAPI_KEY,
       },
-      body: JSON.stringify({ package_name: appId }),
+      body: JSON.stringify({ appID: appId, language: 'en', country }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'RapidAPI details error');
-    const app = data.data?.[0];
+    console.log('[Android] Details status:', res.status);
+    if (!res.ok) throw new Error(JSON.stringify(data));
+    const app = Array.isArray(data.data) ? data.data[0] : (data.data || data);
     if (!app) return null;
-    return formatAndroidAppFromRapidAPI(app, country);
+    return formatAndroidApp(app, country);
   } catch (err) {
     console.error('[Android] Fetch error:', err.message);
     return null;
   }
 }
 
-function formatAndroidAppFromRapidAPI(app, country = 'us') {
+function formatAndroidApp(app, country = 'us') {
+  let daysSinceUpdate = 0;
+  if (app.released) {
+    const releaseDate = new Date(app.released);
+    daysSinceUpdate = Math.floor((Date.now() - releaseDate.getTime()) / (1000 * 60 * 60 * 24));
+  }
   return {
     platform: 'android',
     country,
     name: app.title || '',
     developer: app.developer || '',
     icon: app.icon || '',
-    rating: app.rating ? parseFloat(parseFloat(app.rating).toFixed(1)) : 0,
-    ratingCount: app.reviews || 0,
-    category: app.category || '',
-    description: app.description_long || app.description_short || '',
+    rating: getRating(app),
+    ratingCount: app.ratings || 0,
+    category: app.genre || app.familyGenre || '',
+    description: app.description || app.descriptionHTML || '',
     title: app.title || '',
-    subtitle: app.description_short || '',
-    price: (!app.price || app.price === '0') ? 'Free' : `$${app.price}`,
-    screenshotCount: (app.screenshots || []).length,
-    screenshots: app.screenshots || [],
+    subtitle: '',
+    price: app.free ? 'Free' : `$${app.price?.value || 0}`,
+    screenshotCount: 0,
+    screenshots: [],
     version: app.version || '',
-    lastUpdated: app.updated || '',
-    daysSinceUpdate: 0,
-    size: app.size || 'N/A',
-    url: `https://play.google.com/store/apps/details?id=${app.package_name}`,
-    bundleId: app.package_name || '',
+    lastUpdated: app.released || '',
+    daysSinceUpdate,
+    size: 'N/A',
+    url: `https://play.google.com/store/apps/details?id=${app.id}`,
+    bundleId: app.id || '',
     hasVideo: false,
-    installs: app.downloads || '',
-    contentRating: app.content_rating || '',
-    recentChanges: app.recent_changes || '',
-    appId: app.package_name || '',
+    installs: app.installs || '',
+    contentRating: app.contentRating || '',
+    recentChanges: app.recentChanges || '',
+    appId: app.id || '',
   };
 }
 
