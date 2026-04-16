@@ -442,8 +442,8 @@ router.post('/compare', async (req, res) => {
       }
     };
 
-    // Save to history
-    if (userId) {
+    // Save to history (always, no auth required)
+    try {
       const winner = analysisArray.length > 1
         ? (analysisArray[0]?.overview?.overallScore >= (analysisArray[1]?.overview?.overallScore || 0)
           ? apps[0].name : apps[1].name)
@@ -452,7 +452,6 @@ router.post('/compare', async (req, res) => {
       const { error: saveError } = await supabase
         .from('analysis_history')
         .insert({
-          user_id: userId,
           apps_analyzed: apps.map(a => a.name).join(', '),
           report,
           app_count: apps.length,
@@ -461,6 +460,8 @@ router.post('/compare', async (req, res) => {
         });
 
       if (saveError) console.error('[Analyze] Save history error:', saveError);
+    } catch (saveErr) {
+      console.error('[Analyze] History save exception:', saveErr);
     }
 
     res.json({ success: true, report });
