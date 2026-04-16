@@ -26,7 +26,7 @@ const COUNTRY_NAMES = {
 
 async function callOpenAI(systemPrompt, userPrompt) {
   const completion = await openai.chat.completions.create({
-    model: 'gpt-4.5-preview',   // current API model string for GPT-5 — update if OpenAI changes it
+    model: 'gpt-4.1',   // current API model string for GPT-5 — update if OpenAI changes it
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }
