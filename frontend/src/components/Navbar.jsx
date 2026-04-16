@@ -1,17 +1,8 @@
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { BarChart3, History, LogOut, User, Zap } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { BarChart3, History, Zap } from 'lucide-react';
 
 export default function Navbar() {
-  const { user, signOut } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
-
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/');
-  };
-
   const isActive = (path) => location.pathname === path;
 
   return (
@@ -37,41 +28,14 @@ export default function Navbar() {
               <BarChart3 size={15} />
               Analyze
             </Link>
-
-            {user && (
-              <Link
-                to="/history"
-                className={`btn-ghost text-sm ${isActive('/history') ? 'bg-surface-100 text-slate-800' : ''}`}
-              >
-                <History size={15} />
-                History
-              </Link>
-            )}
+            <Link
+              to="/history"
+              className={`btn-ghost text-sm ${isActive('/history') ? 'bg-surface-100 text-slate-800' : ''}`}
+            >
+              <History size={15} />
+              History
+            </Link>
           </nav>
-
-          {/* Auth section */}
-          <div className="flex items-center gap-2">
-            {user ? (
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-50 rounded-xl border border-surface-200">
-                  <div className="w-6 h-6 bg-brand-100 rounded-full flex items-center justify-center">
-                    <User size={12} className="text-brand-600" />
-                  </div>
-                  <span className="text-xs font-medium text-slate-600 max-w-[140px] truncate">
-                    {user.email}
-                  </span>
-                </div>
-                <button onClick={handleSignOut} className="btn-ghost text-sm text-red-500 hover:text-red-600 hover:bg-red-50">
-                  <LogOut size={15} />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Link to="/login" className="btn-ghost text-sm">Sign in</Link>
-                <Link to="/register" className="btn-primary text-sm">Get started</Link>
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </header>
