@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { BarChart3, FileText, Zap, Image, Users, Lightbulb, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp } from 'lucide-react';
 import ScoreRing, { PillarScoreBar } from './ScoreCard';
+import {
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  Cell,
+} from 'recharts';
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: BarChart3 },
@@ -545,132 +550,237 @@ function AppTextTab({ apps }) {
 
 // ─── CREATIVE SCORING TAB ────────────────────────────────────────────────────
 
+// ── Chart colour palette — one per app ──────────────────────────────────────
+const APP_COLORS = ['#6366f1', '#a855f7', '#06b6d4', '#f59e0b', '#10b981'];
+
+// Custom tooltip shared by all recharts charts
+function ChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl shadow-lg px-3 py-2 text-xs">
+      {label && <p className="font-semibold text-slate-700 mb-1">{label}</p>}
+      {payload.map((p, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color }} />
+          <span className="text-slate-600">{p.name}:</span>
+          <span className="font-bold text-slate-800">{p.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CreativeScoringTab({ apps }) {
+  const SECTIONS = [
+    { key: 'creativeStrategy',  label: 'Strategy',    fullLabel: 'Creative Strategy',     desc: 'Storytelling, hook strength, clarity, value prop, CTA',             subKeys: ['hookStrength','messageClarity','ctaEffectiveness','storytellingQuality','valuePropositionClarity'] },
+    { key: 'designVisuals',     label: 'Design',      fullLabel: 'Design & Visuals',       desc: 'Consistency, color, human presence, UI balance, thumbnail',          subKeys: ['humanRelatability','visualConsistency','uiLifestyleBalance','thumbnailRecognition','colorStrategyEffectiveness'] },
+    { key: 'marketFit',         label: 'Market Fit',  fullLabel: 'Market Fit',             desc: 'Brand alignment, audience match, localisation, cultural fit',        subKeys: ['audienceMatch','brandAlignment','culturalRelevance','localizationQuality'] },
+    { key: 'differentiation',   label: 'Differ.',     fullLabel: 'Differentiation',        desc: 'Uniqueness, pattern repetition, positioning clarity',                subKeys: ['patternRepetition','uniquenessVsCompetitors','distinctPositioning'] },
+    { key: 'performance',       label: 'Perf.',       fullLabel: 'Performance Heuristics', desc: 'Conversion likelihood, first impression, drop-off risk',             subKeys: ['firstImpressionScore','screenshotDropOff','likelyConversionRate'] },
+  ];
+
+  const formatSubKey = (k) => k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+
+  // ── Radar data: one point per dimension, one series per app ─────────────────
+  const radarData = SECTIONS.map(({ key, label }) => {
+    const point = { dimension: label };
+    apps.forEach((app) => {
+      const cs = app.analysis?.creativeScoring || {};
+      point[app.name.split(':')[0]] = cs[key]?.total ?? 0;
+    });
+    return point;
+  });
+
+  // ── Overall score ranking bar data ──────────────────────────────────────────
+  const overallData = [...apps]
+    .map((app) => ({
+      name: app.name.split(':')[0],
+      score: app.analysis?.overview?.influenceStrength || app.analysis?.overview?.overallScore || 0,
+      icon: app.icon,
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  // ── Dimension comparison grouped bar chart ───────────────────────────────────
+  const dimCompData = SECTIONS.map(({ key, label }) => {
+    const row = { dimension: label };
+    apps.forEach((app) => {
+      const cs = app.analysis?.creativeScoring || {};
+      row[app.name.split(':')[0]] = cs[key]?.total ?? 0;
+    });
+    return row;
+  });
+
   return (
     <div className="space-y-4 pb-8">
-      {/* Overall Score Ranking */}
+
+      {/* ── TOP ROW: Radar + Overall Ranking ──────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-4">
+
+        {/* Radar chart */}
+        <SectionCard>
+          <h4 className="text-sm font-bold text-slate-800 mb-0.5">Category Radar</h4>
+          <p className="text-xs text-slate-500 mb-3">5 creative dimensions compared across all apps</p>
+          <ResponsiveContainer width="100%" height={240}>
+            <RadarChart data={radarData} margin={{ top: 10, right: 20, bottom: 10, left: 20 }}>
+              <PolarGrid stroke="#e2e8f0" />
+              <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 11, fill: '#64748b' }} />
+              <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+              {apps.map((app, i) => (
+                <Radar
+                  key={i}
+                  name={app.name.split(':')[0]}
+                  dataKey={app.name.split(':')[0]}
+                  stroke={APP_COLORS[i % APP_COLORS.length]}
+                  fill={APP_COLORS[i % APP_COLORS.length]}
+                  fillOpacity={0.15}
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: APP_COLORS[i % APP_COLORS.length] }}
+                />
+              ))}
+              <Tooltip content={<ChartTooltip />} />
+              <Legend
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }}
+              />
+            </RadarChart>
+          </ResponsiveContainer>
+        </SectionCard>
+
+        {/* Overall score ranking */}
+        <SectionCard>
+          <h4 className="text-sm font-bold text-slate-800 mb-0.5">Overall Score Ranking</h4>
+          <p className="text-xs text-slate-500 mb-3">Composite creative score per app, highest first</p>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={overallData} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+              <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#475569' }} axisLine={false} tickLine={false} width={90} />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: '#f8fafc' }} />
+              <Bar dataKey="score" radius={[0, 6, 6, 0]} maxBarSize={28}>
+                {overallData.map((_, i) => (
+                  <Cell key={i} fill={APP_COLORS[i % APP_COLORS.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </SectionCard>
+      </div>
+
+      {/* ── Dimension-by-dimension grouped bar chart ─────────────────────────── */}
       {apps.length > 1 && (
         <SectionCard>
-          <h4 className="text-sm font-bold text-slate-800 mb-1">Overall Score Ranking</h4>
-          <p className="text-xs text-slate-500 mb-4">Composite creative score per app, highest first</p>
-          {[...apps].sort((a, b) => {
-            const sa = a.analysis?.overview?.overallScore || 0;
-            const sb = b.analysis?.overview?.overallScore || 0;
-            return sb - sa;
-          }).map((app, i) => {
-            const score = app.analysis?.overview?.overallScore || app.analysis?.overview?.influenceStrength || 0;
-            return (
-              <div key={i} className="flex items-center gap-3 mb-3">
-                {app.icon && <img src={app.icon} alt="" className="w-7 h-7 rounded-xl flex-shrink-0" />}
-                <span className="text-xs text-slate-700 w-32 truncate flex-shrink-0">{app.name.split(':')[0]}</span>
-                <div className="flex-1 h-2.5 bg-slate-200 rounded-full">
-                  <div className="h-full rounded-full bg-brand-500" style={{ width: `${score}%` }} />
-                </div>
-                <span className="text-sm font-bold text-slate-800 w-8 text-right flex-shrink-0">{score}</span>
-              </div>
-            );
-          })}
+          <h4 className="text-sm font-bold text-slate-800 mb-0.5">Dimension-by-Dimension Comparison</h4>
+          <p className="text-xs text-slate-500 mb-4">Score per creative category grouped by app (0–100)</p>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={dimCompData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="dimension" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: '#f8fafc' }} />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '11px' }} />
+              {apps.map((app, i) => (
+                <Bar
+                  key={i}
+                  dataKey={app.name.split(':')[0]}
+                  fill={APP_COLORS[i % APP_COLORS.length]}
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={32}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
         </SectionCard>
       )}
 
+      {/* ── Per-app detail cards ──────────────────────────────────────────────── */}
       {apps.map((app, idx) => {
         const cs = app.analysis?.creativeScoring || {};
+        const appColor = APP_COLORS[idx % APP_COLORS.length];
 
-        const sections = [
-          {
-            key: 'creativeStrategy', label: 'Creative Strategy',
-            desc: 'Storytelling, hook strength, clarity, value prop, CTA',
-            data: cs.creativeStrategy || {},
-            subKeys: ['hookStrength', 'messageClarity', 'ctaEffectiveness', 'storytellingQuality', 'valuePropositionClarity'],
-          },
-          {
-            key: 'designVisuals', label: 'Design & Visuals',
-            desc: 'Consistency, color, human presence, UI balance, thumbnail',
-            data: cs.designVisuals || {},
-            subKeys: ['humanRelatability', 'visualConsistency', 'uiLifestyleBalance', 'thumbnailRecognition', 'colorStrategyEffectiveness'],
-          },
-          {
-            key: 'marketFit', label: 'Market Fit',
-            desc: 'Brand alignment, audience match, localisation, cultural fit',
-            data: cs.marketFit || {},
-            subKeys: ['audienceMatch', 'brandAlignment', 'culturalRelevance', 'localizationQuality'],
-          },
-          {
-            key: 'differentiation', label: 'Differentiation',
-            desc: 'Uniqueness, pattern repetition, positioning clarity',
-            data: cs.differentiation || {},
-            subKeys: ['patternRepetition', 'uniquenessVsCompetitors', 'distinctPositioning'],
-          },
-          {
-            key: 'performance', label: 'Performance Heuristics',
-            desc: 'Conversion likelihood, first impression, drop-off risk',
-            data: cs.performance || {},
-            subKeys: ['firstImpressionScore', 'screenshotDropOff', 'likelyConversionRate'],
-          },
-        ];
+        // sub-dimension bar charts (one per pillar)
+        const subCharts = SECTIONS.map(({ key, fullLabel, desc, subKeys }) => {
+          const data = cs[key] || {};
+          const chartData = subKeys
+            .filter((sk) => data[sk] !== undefined)
+            .map((sk) => ({ name: formatSubKey(sk), score: data[sk] }));
+          return { key, fullLabel, desc, total: data.total || 0, chartData };
+        });
 
-        const formatSubKey = (k) => k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+        // Hook type distribution bar chart
+        const hookDist = cs.hookTypeDistribution;
+        const hookData = hookDist
+          ? [
+              { name: 'Benefit-led',  count: hookDist.benefitLed  || 0, fill: '#6366f1' },
+              { name: 'Social Proof', count: hookDist.socialProof || 0, fill: '#f59e0b' },
+              { name: 'Feature-led',  count: hookDist.featureLed  || 0, fill: '#64748b' },
+            ]
+          : [];
 
         return (
           <div key={idx} className="space-y-4">
             <SectionCard>
               <AppHeader app={app} />
+
               {cs.creativeNarrative && (
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 mb-4">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 mb-5">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Creative Narrative</p>
                   <p className="text-sm text-slate-700 leading-relaxed">{cs.creativeNarrative}</p>
                   {cs.dominantTone && (
-                    <p className="text-xs text-slate-500 mt-2">Tone: <span className="text-slate-700">{cs.dominantTone}</span></p>
+                    <p className="text-xs text-slate-500 mt-2">Tone: <span className="font-medium text-slate-700">{cs.dominantTone}</span></p>
                   )}
                 </div>
               )}
 
-              {/* Dimension grid */}
-              <div className="grid grid-cols-2 gap-4">
-                {sections.map(({ key, label, desc, data, subKeys }) => (
+              {/* Sub-dimension bar charts — 3-column grid */}
+              <div className="grid grid-cols-3 gap-4">
+                {subCharts.map(({ key, fullLabel, desc, total, chartData }) => (
                   <div key={key} className="p-4 bg-slate-50 rounded-xl">
                     <div className="flex justify-between items-start mb-3">
                       <div>
-                        <p className="text-sm font-bold text-slate-800">{label}</p>
-                        <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
+                        <p className="text-xs font-bold text-slate-800">{fullLabel}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">{desc}</p>
                       </div>
-                      <div className="text-xl font-bold text-slate-800 flex-shrink-0 ml-2">{data.total || 0}<span className="text-slate-500 text-xs font-normal"> /100</span></div>
+                      <span className="text-lg font-bold ml-2 flex-shrink-0" style={{ color: appColor }}>
+                        {total}<span className="text-slate-400 text-xs font-normal">/100</span>
+                      </span>
                     </div>
-                    <div className="space-y-2">
-                      {subKeys.map((sk) => (
-                        data[sk] !== undefined && (
-                          <PillarScoreBar key={sk} label={formatSubKey(sk)} score={data[sk]} maxScore={10} />
-                        )
-                      ))}
-                    </div>
+                    {chartData.length > 0 && (
+                      <ResponsiveContainer width="100%" height={120}>
+                        <BarChart data={chartData} margin={{ top: 0, right: 0, left: -28, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                          <XAxis dataKey="name" tick={{ fontSize: 8, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval={0} />
+                          <YAxis domain={[0, 10]} tick={{ fontSize: 8, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                          <Tooltip content={<ChartTooltip />} cursor={{ fill: '#f8fafc' }} />
+                          <Bar dataKey="score" fill={appColor} radius={[3, 3, 0, 0]} maxBarSize={20} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
                   </div>
                 ))}
 
-                {/* Hook type distribution */}
-                {cs.hookTypeDistribution && (
+                {/* Hook type distribution mini chart */}
+                {hookData.length > 0 && (
                   <div className="p-4 bg-slate-50 rounded-xl">
-                    <p className="text-sm font-bold text-slate-800 mb-3">Hook Type Distribution</p>
-                    <p className="text-xs text-slate-500 mb-3">Screenshots per hook strategy</p>
-                    {[
-                      { label: 'Benefit-led', val: cs.hookTypeDistribution.benefitLed, color: 'bg-brand-500' },
-                      { label: 'Social Proof', val: cs.hookTypeDistribution.socialProof, color: 'bg-amber-500' },
-                      { label: 'Feature-led', val: cs.hookTypeDistribution.featureLed, color: 'bg-slate-500' },
-                    ].map((h, i) => (
-                      <div key={i} className="flex items-center gap-2 mb-2">
-                        <span className={`w-2.5 h-2.5 rounded-sm flex-shrink-0 ${h.color}`} />
-                        <span className="text-xs text-slate-500 w-20">{h.label}</span>
-                        <div className="flex-1 h-2 bg-slate-200 rounded-full">
-                          <div className={`h-full rounded-full ${h.color}`} style={{ width: `${Math.min((h.val || 0) * 10, 100)}%` }} />
-                        </div>
-                        <span className="text-xs text-slate-700 w-4 text-right">{h.val || 0}</span>
-                      </div>
-                    ))}
+                    <p className="text-xs font-bold text-slate-800 mb-0.5">Hook Type Distribution</p>
+                    <p className="text-[10px] text-slate-400 mb-3">Screenshots per hook strategy</p>
+                    <ResponsiveContainer width="100%" height={120}>
+                      <BarChart data={hookData} margin={{ top: 0, right: 0, left: -28, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                        <XAxis dataKey="name" tick={{ fontSize: 8, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 8, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                        <Tooltip content={<ChartTooltip />} cursor={{ fill: '#f8fafc' }} />
+                        <Bar dataKey="count" radius={[3, 3, 0, 0]} maxBarSize={28}>
+                          {hookData.map((h, i) => <Cell key={i} fill={h.fill} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
                 )}
               </div>
             </SectionCard>
 
-            {/* Dimension comparison across apps */}
+            {/* Dimension comparison table */}
             {apps.length > 1 && (
               <SectionCard>
                 <h4 className="text-sm font-bold text-slate-800 mb-1">Dimension-by-Dimension Comparison</h4>
@@ -691,9 +801,9 @@ function CreativeScoringTab({ apps }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
-                      {sections.map(({ key, label }) => (
+                      {SECTIONS.map(({ key, fullLabel }) => (
                         <tr key={key}>
-                          <td className="py-2.5 text-slate-500">{label}</td>
+                          <td className="py-2.5 text-slate-500">{fullLabel}</td>
                           {apps.map((a, ai) => {
                             const aCs = a.analysis?.creativeScoring || {};
                             const score = aCs[key]?.total ?? 0;
