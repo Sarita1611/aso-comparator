@@ -1,13 +1,23 @@
 const API_URL = import.meta.env.VITE_API_URL || '';
 
-async function request(path, options = {}) {
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
-  return data;
+async function request(path, options = {}, timeoutMs = 180000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${API_URL}${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      ...options,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('Request timed out. The analysis is taking longer than expected — please try again.');
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export const api = {
