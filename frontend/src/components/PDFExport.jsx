@@ -5,59 +5,69 @@ export async function exportReportToPDF(elementId, filename = 'aso-report') {
   const element = document.getElementById(elementId);
   if (!element) throw new Error('Report element not found');
 
-  // Temporarily make element full width for PDF
-  const originalStyle = element.style.cssText;
-  element.style.width = '1200px';
-  element.style.maxWidth = '1200px';
+  // Find the tab buttons and content area
+  const tabButtons = element.querySelectorAll('[data-tab-id]');
+  const tabContentArea = element.querySelector('[data-tab-content]');
 
-  try {
-    const canvas = await html2canvas(element, {
-      scale: 1.5,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#f8fafc',
-      logging: false,
-      windowWidth: 1200,
-    });
-
-    const imgData = canvas.toDataURL('image/png', 0.95);
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4',
-    });
-
+  // If we have tabs, render each one and combine
+  if (tabButtons.length > 0 && tabContentArea) {
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = canvas.width;
-    const imgHeight = canvas.height;
-    const ratio = pdfWidth / imgWidth;
-    const scaledHeight = imgHeight * ratio;
+    let isFirstPage = true;
 
-    let position = 0;
-    let remainingHeight = scaledHeight;
+    for (const btn of tabButtons) {
+      btn.click();
+      await new Promise(r => setTimeout(r, 600)); // wait for render
 
-    // Add pages
-    while (remainingHeight > 0) {
-      if (position > 0) pdf.addPage();
+      const canvas = await html2canvas(tabContentArea, {
+        scale: 1.5,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        windowWidth: 1200,
+      });
 
-      pdf.addImage(
-        imgData,
-        'PNG',
-        0,
-        -position,
-        pdfWidth,
-        scaledHeight,
-        '',
-        'FAST'
-      );
+      const imgData = canvas.toDataURL('image/png', 0.95);
+      const ratio = pdfWidth / canvas.width;
+      const scaledHeight = canvas.height * ratio;
+      let position = 0;
+      let remaining = scaledHeight;
 
-      position += pdfHeight;
-      remainingHeight -= pdfHeight;
+      while (remaining > 0) {
+        if (!isFirstPage) pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, -position, pdfWidth, scaledHeight, '', 'FAST');
+        position += pdfHeight;
+        remaining -= pdfHeight;
+        isFirstPage = false;
+      }
     }
 
     pdf.save(`${filename}-${new Date().toISOString().split('T')[0]}.pdf`);
-  } finally {
-    element.style.cssText = originalStyle;
+    return;
   }
+
+  // Fallback: capture whole element
+  const canvas = await html2canvas(element, {
+    scale: 1.5, useCORS: true, allowTaint: true,
+    backgroundColor: '#ffffff', logging: false, windowWidth: 1200,
+  });
+  const imgData = canvas.toDataURL('image/png', 0.95);
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pdfWidth = pdf.internal.pageSize.getWidth();
+  const pdfHeight = pdf.internal.pageSize.getHeight();
+  const ratio = pdfWidth / canvas.width;
+  const scaledHeight = canvas.height * ratio;
+  let position = 0;
+  let remaining = scaledHeight;
+  let first = true;
+  while (remaining > 0) {
+    if (!first) pdf.addPage();
+    pdf.addImage(imgData, 'PNG', 0, -position, pdfWidth, scaledHeight, '', 'FAST');
+    position += pdfHeight;
+    remaining -= pdfHeight;
+    first = false;
+  }
+  pdf.save(`${filename}-${new Date().toISOString().split('T')[0]}.pdf`);
 }
