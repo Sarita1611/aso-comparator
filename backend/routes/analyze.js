@@ -26,7 +26,7 @@ const COUNTRY_NAMES = {
 
 async function callOpenAI(systemPrompt, userPrompt) {
   const completion = await openai.chat.completions.create({
-    model: 'gpt-5.1',   // current API model string for GPT-5 — update if OpenAI changes it
+    model: 'gpt-4o',
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }
@@ -39,7 +39,6 @@ async function callOpenAI(systemPrompt, userPrompt) {
   return text;
 }
 
-// Call Groq correctly using the client instance
 async function callGroq(systemPrompt, userPrompt) {
   const completion = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
@@ -55,7 +54,6 @@ async function callGroq(systemPrompt, userPrompt) {
   return text;
 }
 
-// Call Gemini as fallback - tries gemini-2.0-flash first, then gemini-2.0-flash-lite
 async function callGemini(systemPrompt, userPrompt) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not set');
@@ -63,7 +61,6 @@ async function callGemini(systemPrompt, userPrompt) {
   const prompt = `${systemPrompt}\n\n${userPrompt}`;
   const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-  // Try gemini-2.0-flash first
   try {
     console.log('[Gemini] Trying gemini-2.0-flash...');
     const res = await fetch(`${BASE}/gemini-2.0-flash:generateContent?key=${apiKey}`, {
@@ -84,8 +81,6 @@ async function callGemini(systemPrompt, userPrompt) {
     console.warn('[Gemini] gemini-2.0-flash failed, trying gemini-2.0-flash-lite:', err.message);
   }
 
-  // Fallback to gemini-2.0-flash-lite
-  console.log('[Gemini] Trying gemini-2.0-flash-lite...');
   const res = await fetch(`${BASE}/gemini-2.0-flash-lite:generateContent?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -100,6 +95,60 @@ async function callGemini(systemPrompt, userPrompt) {
   if (!text) throw new Error('Empty response from gemini-2.0-flash-lite');
   console.log('[Gemini] gemini-2.0-flash-lite succeeded');
   return text;
+}
+
+// Robust JSON extractor — finds the first [ or { and matches its closing bracket
+function extractJSON(text) {
+  // Remove markdown fences first
+  let cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+
+  // Find the first [ or {
+  const arrayStart = cleaned.indexOf('[');
+  const objectStart = cleaned.indexOf('{');
+
+  let startIdx = -1;
+  let openChar, closeChar;
+
+  if (arrayStart === -1 && objectStart === -1) return null;
+
+  if (arrayStart === -1) {
+    startIdx = objectStart;
+    openChar = '{'; closeChar = '}';
+  } else if (objectStart === -1) {
+    startIdx = arrayStart;
+    openChar = '['; closeChar = ']';
+  } else if (arrayStart < objectStart) {
+    startIdx = arrayStart;
+    openChar = '['; closeChar = ']';
+  } else {
+    startIdx = objectStart;
+    openChar = '{'; closeChar = '}';
+  }
+
+  // Walk the string counting brackets to find the matching close
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = startIdx; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+
+    if (ch === openChar) depth++;
+    else if (ch === closeChar) {
+      depth--;
+      if (depth === 0) {
+        return cleaned.slice(startIdx, i + 1);
+      }
+    }
+  }
+
+  // If bracket matching failed, return everything from startIdx as last resort
+  return cleaned.slice(startIdx);
 }
 
 function buildDetailedAnalysisPrompt(knowledge, country, appsData) {
@@ -391,7 +440,7 @@ router.post('/compare', async (req, res) => {
   }
 
   try {
-    // Get RAG knowledge - pass apps array directly
+    // Get RAG knowledge
     let knowledge = null;
     try {
       knowledge = await getRelevantASOKnowledge(apps);
@@ -403,7 +452,7 @@ router.post('/compare', async (req, res) => {
     const systemPrompt = buildDetailedAnalysisPrompt(knowledge, country, apps);
     const userPrompt = `Analyze these ${apps.length} apps and return a JSON array with one detailed analysis object per app.`;
 
-    // NEW — OpenAI primary, Groq fallback
+    // OpenAI primary, Groq fallback
     let analysisText = '';
     try {
       console.log('[Analyze] Calling OpenAI for detailed analysis...');
@@ -419,14 +468,22 @@ router.post('/compare', async (req, res) => {
       }
     }
 
-    // Strip markdown fences and parse JSON
-    const cleaned = analysisText.replace(/```json|```/g, '').trim();
-    const jsonMatch = cleaned.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
-    if (!jsonMatch) {
+    // Robust JSON extraction
+    const jsonStr = extractJSON(analysisText);
+    if (!jsonStr) {
+      console.error('[Analyze] Raw response:', analysisText.slice(0, 500));
       throw new Error('Could not extract JSON from AI response');
     }
 
-    const analysisData = JSON.parse(jsonMatch[0]);
+    let analysisData;
+    try {
+      analysisData = JSON.parse(jsonStr);
+    } catch (parseErr) {
+      console.error('[Analyze] JSON parse error:', parseErr.message);
+      console.error('[Analyze] Problematic JSON (first 500 chars):', jsonStr.slice(0, 500));
+      throw new Error(`JSON parse failed: ${parseErr.message}`);
+    }
+
     const analysisArray = Array.isArray(analysisData) ? analysisData : [analysisData];
 
     // Build final report
