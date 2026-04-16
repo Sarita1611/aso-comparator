@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { BarChart3, History } from 'lucide-react';
+import logo from '../logo.png';
 
 export default function Navbar() {
   const location = useLocation();
@@ -11,7 +12,7 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center group">
-              <img src="/logo.png" alt="PiiX" className="h-8" />
+              <img src={logo} alt="Logo" className="h-8" />
           </Link>
 
           {/* Nav links */}
