@@ -4,7 +4,6 @@ import AppInputCard from '../components/AppInputCard';
 import ReportSection from '../components/ReportSection';
 import { api } from '../lib/api';
 import { exportReportToPDF } from '../components/PDFExport';
-import { Link } from 'react-router-dom';
 
 const MAX_APPS = 4;
 
@@ -23,7 +22,6 @@ export default function Landing() {
   const [countrySearch, setCountrySearch] = useState('');
 
   useEffect(() => {
-    api.health().catch(() => {}); // warm up Railway backend on page load
     api.getCountries().then(({ countries }) => setCountries(countries)).catch(() => {});
     const handleClick = () => setShowCountryDropdown(false);
     document.addEventListener('mousedown', handleClick);
@@ -104,7 +102,6 @@ export default function Landing() {
           <p className="text-slate-500 text-base max-w-xl mx-auto">
             Enter up to 4 apps and get a detailed AI-powered ASO comparison — scores, keyword analysis, competitor gaps, and actionable roadmaps.
           </p>
-
         </div>
       )}
 
@@ -245,7 +242,6 @@ export default function Landing() {
               {exportingPDF ? <><Loader2 size={15} className="animate-spin" /> Exporting...</> : <><Download size={15} /> Download PDF</>}
             </button>
           </div>
-
         </div>
       )}
     </div>
