@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { BarChart3, History } from 'lucide-react';
-import logo from '../logo.png';
+import logo from '../PiiX_logo.png';
 
 export default function Navbar() {
   const location = useLocation();
