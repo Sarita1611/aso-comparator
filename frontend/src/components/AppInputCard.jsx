@@ -92,7 +92,7 @@ export default function AppInputCard({ index, appData, onAppFetched, onRemove, c
             <span className="text-xs font-bold text-brand-700">#{index + 1}</span>
           </div>
           <span className="text-sm font-semibold text-slate-700 font-display">
-            {appData ? appData.name : `App ${index + 1}`}
+            {appData ? appData.name : index === 0 ? 'Your App' : `Competitor ${index}`}
           </span>
           {appData && (
             <span className={`badge border text-xs ${platformColors[appData.platform]}`}>
