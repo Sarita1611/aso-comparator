@@ -17,7 +17,7 @@ export default function Landing() {
 
   // Country state
   const [countries, setCountries] = useState([]);
-  const [selectedCountry, setSelectedCountry] = useState({ name: 'United States', code: 'us' });
+  const [selectedCountry, setSelectedCountry] = useState({ name: 'India', code: 'in' });
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
 
