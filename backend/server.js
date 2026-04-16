@@ -11,9 +11,34 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000', process.env.FRONTEND_URL].filter(Boolean),
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, server-to-server)
+    if (!origin) return callback(null, true);
+    const allowed = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      process.env.FRONTEND_URL,
+    ].filter(Boolean);
+    // Also allow any vercel.app subdomain and the exact production URL
+    if (
+      allowed.includes(origin) ||
+      origin.endsWith('.vercel.app') ||
+      origin.endsWith('.railway.app')
+    ) {
+      return callback(null, true);
+    }
+    callback(new Error(`CORS blocked: ${origin}`));
+  },
   credentials: true
 }));
+
+// Increase default request timeout to 3 minutes for long AI analysis calls
+app.use((req, res, next) => {
+  res.setTimeout(180000, () => {
+    res.status(503).json({ error: 'Request timed out. Please try again.' });
+  });
+  next();
+});
 
 app.use(express.json({ limit: '10mb' }));
 
