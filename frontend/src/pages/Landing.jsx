@@ -23,6 +23,7 @@ export default function Landing() {
   const [countrySearch, setCountrySearch] = useState('');
 
   useEffect(() => {
+    api.health().catch(() => {}); // warm up Railway backend on page load
     api.getCountries().then(({ countries }) => setCountries(countries)).catch(() => {});
     const handleClick = () => setShowCountryDropdown(false);
     document.addEventListener('mousedown', handleClick);
