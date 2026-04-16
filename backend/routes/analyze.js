@@ -48,7 +48,7 @@ async function callGroq(systemPrompt, userPrompt) {
       { role: 'user', content: userPrompt }
     ],
     temperature: 0.15,
-    max_tokens: 6000,
+    max_tokens: 8000,
   });
   const text = completion.choices?.[0]?.message?.content;
   if (!text) throw new Error('Empty response from Groq');
@@ -137,6 +137,13 @@ CRITICAL REQUIREMENTS:
 5. Quick wins must be ranked by impact/effort ratio (highest ROI first)
 6. Delta scores = this app's score minus field average across all analyzed apps
 7. Suggest 10 realistic iOS keyword field keywords (comma-separated, under 100 chars total)
+8. Analyze ALL screenshots individually — never truncate the screens array
+9. For competitors, provide REAL competitor names from the same category, not placeholders
+10. topRecommendations must have minimum 6 items
+11. quickWins must have minimum 3 items  
+12. primarySegments in ICP must have minimum 3 segments
+13. keywordAnalysis.suggested must have minimum 8 keywords
+14. Every text field must be fully written out — never truncate with "..."
 
 Return a JSON array, one object per app, with EXACTLY this structure:
 
