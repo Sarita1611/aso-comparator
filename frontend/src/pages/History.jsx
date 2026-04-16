@@ -1,13 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { Download, Trash2, Loader2, Trophy, Smartphone, ChevronRight, BarChart2, Plus } from 'lucide-react';
 import { exportReportToPDF } from '../components/PDFExport';
 import ReportSection from '../components/ReportSection';
 
-// Helper: apps_analyzed is stored as a string in DB e.g. "Instagram, Zomato"
-// This converts it to a consistent array format
 function parseAppsAnalyzed(apps_analyzed) {
   if (!apps_analyzed) return [];
   if (Array.isArray(apps_analyzed)) return apps_analyzed;
@@ -23,8 +20,6 @@ function getAppsLabel(apps_analyzed) {
 }
 
 export default function HistoryPage() {
-  const { user } = useAuth();
-  const navigate = useNavigate();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -35,15 +30,14 @@ export default function HistoryPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!user) { navigate('/login'); return; }
     fetchHistory();
-  }, [user, page]);
+  }, [page]);
 
   const fetchHistory = async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await api.getHistory(user.id, page);
+      const data = await api.getHistory(page);
       setHistory(data.history || []);
       setTotalPages(data.totalPages || 1);
     } catch (err) {
@@ -59,7 +53,7 @@ export default function HistoryPage() {
     if (!confirm('Delete this analysis? This cannot be undone.')) return;
     setDeletingId(id);
     try {
-      await api.deleteHistoryEntry(id, user.id);
+      await api.deleteHistoryEntry(id);
       setHistory(prev => prev.filter(h => h.id !== id));
       if (selectedEntry?.id === id) setSelectedEntry(null);
     } catch (err) {
@@ -87,8 +81,6 @@ export default function HistoryPage() {
   const formatDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
   });
-
-  if (!user) return null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
