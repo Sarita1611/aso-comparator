@@ -104,7 +104,7 @@ async function callGemini(systemPrompt, userPrompt) {
 
 function buildDetailedAnalysisPrompt(knowledge, country, appsData) {
   const countryName = COUNTRY_NAMES[country] || country.toUpperCase();
-  
+
   const appsSummary = appsData.map(app => `
 App: ${app.name}
 Platform: ${app.platform}
@@ -113,166 +113,244 @@ Rating: ${app.rating} (${app.ratingCount} reviews)
 Title: "${app.title}"
 Subtitle: "${app.subtitle}"
 Description length: ${app.description?.length || 0} chars
+Description (first 500 chars): "${app.description?.slice(0, 500) || ''}"
 Screenshots: ${app.screenshotCount || 0}
+Screenshot URLs: ${JSON.stringify(app.screenshots || [])}
 Last Updated: ${app.lastUpdated}
 Developer: ${app.developer}
 Price: ${app.price}
+Installs: ${app.installs || 'N/A'}
   `).join('\n---\n');
 
-  return `You are a world-class ASO expert. Analyze these apps for the ${countryName} market and generate a DETAILED, COMPREHENSIVE report.
+  return `You are a world-class ASO creative intelligence expert. Analyze these apps for the ${countryName} market and generate a deeply detailed report.
 
 ${appsSummary}
 
 ASO KNOWLEDGE:
-${knowledge || 'Use your expert ASO knowledge to analyze these apps.'}
+${knowledge || 'Use your expert ASO knowledge.'}
 
 CRITICAL REQUIREMENTS:
-1. Return ONLY valid JSON - no markdown, no explanations, start with [
-2. All scores must be 0-100 numbers
-3. Be extremely specific - quote actual text, give exact character counts
-4. Include detailed strategic analysis with actionable recommendations
-5. Structure must match exactly what I specify below
-6. Include competitive positioning and market opportunities
-7. Provide specific keyword suggestions with difficulty levels
-8. Give detailed scoring breakdowns for each dimension
+1. Return ONLY valid JSON array — no markdown, no explanation, start with [
+2. All scores must be numbers (0-100 for overview scores, 0-10 for sub-scores)
+3. Be extremely specific — quote actual text, give character counts
+4. Infer ICP segments from app name, category, description, and market context
+5. Quick wins must be ranked by impact/effort ratio (highest ROI first)
+6. Delta scores = this app's score minus field average across all analyzed apps
+7. Suggest 10 realistic iOS keyword field keywords (comma-separated, under 100 chars total)
 
-Return a JSON ARRAY with one object per app. Each object must have this structure:
+Return a JSON array, one object per app, with EXACTLY this structure:
 
 {
   "overview": {
     "influenceStrength": <0-100>,
     "summary": "<2-3 sentence executive summary>",
-    "creativeStrategy": <0-100>,
-    "designVisuals": <0-100>,
-    "marketFit": <0-100>,
-    "differentiation": <0-100>,
-    "performance": <0-100>,
     "overallScore": <0-100>,
-    "keyStrengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
-    "keyWeaknesses": ["<weakness 1>", "<weakness 2>", "<weakness 3>"]
-  },
-  "appText": {
-    "overallTextScore": <0-10>,
-    "uniqueness": <0-100>,
-    "strategicAssessment": "<3-4 sentence analysis>",
-    "title": {
-      "score": <0-10>,
-      "currentValue": "<actual title>",
-      "length": "<X/30 characters>",
-      "utilization": "<percentage>%",
-      "primaryKeywords": ["<kw1>", "<kw2>"],
-      "strengths": ["<strength>"],
-      "weaknesses": ["<weakness>"],
-      "suggestions": ["<suggestion>"]
+    "keyStrengths": ["<str1>", "<str2>", "<str3>"],
+    "keyWeaknesses": ["<weak1>", "<weak2>", "<weak3>"],
+    "quickWins": [
+      {
+        "rank": 1,
+        "impact": "HIGH",
+        "effort": "LOW",
+        "category": "APP STORE TEXT",
+        "title": "<actionable title>",
+        "description": "<why this matters and what to do>"
+      }
+    ],
+    "funnelCoverage": {
+      "hook": <true|false>,
+      "features": <true|false>,
+      "socialProof": <true|false>,
+      "cta": <true|false>
     },
-    "subtitle": {
-      "score": <0-10>,
-      "currentValue": "<subtitle or MISSING>",
-      "length": "<X/30 characters>",
-      "utilization": "<percentage>%",
-      "strengths": ["<strength>"],
-      "weaknesses": ["<weakness>"],
-      "suggestions": ["<suggestion>"]
+    "performanceSignals": {
+      "firstImpression": <0-10>,
+      "conversionStrength": <0-10>,
+      "dropOffRisk": <0-10>
     },
-    "description": {
-      "score": <0-10>,
-      "length": "<X/4000 characters>",
-      "utilization": "<percentage>%",
-      "openingLine": "<first sentence>",
-      "keywordDensity": "<X% density>",
-      "strengths": ["<strength>"],
-      "weaknesses": ["<weakness>"],
-      "suggestions": ["<suggestion>"]
+    "screenshotWeakestLink": {
+      "screenNumber": <number>,
+      "clarity": <0-10>,
+      "stopPower": <0-10>,
+      "suggestion": "<what to replace it with>"
     }
   },
   "creativeScoring": {
-    "categoryRadar": {
-      "strategy": <0-100>,
-      "design": <0-100>,
-      "differentiation": <0-100>,
-      "marketFit": <0-100>,
-      "performance": <0-100>
+    "creativeStrategy": {
+      "total": <0-100>,
+      "hookStrength": <0-10>,
+      "messageClarity": <0-10>,
+      "ctaEffectiveness": <0-10>,
+      "storytellingQuality": <0-10>,
+      "valuePropositionClarity": <0-10>
     },
-    "dimensionComparison": {
-      "strategy": <0-100>,
-      "design": <0-100>,
-      "marketFit": <0-100>,
-      "differentiation": <0-100>,
-      "performance": <0-100>
+    "designVisuals": {
+      "total": <0-100>,
+      "humanRelatability": <0-10>,
+      "visualConsistency": <0-10>,
+      "uiLifestyleBalance": <0-10>,
+      "thumbnailRecognition": <0-10>,
+      "colorStrategyEffectiveness": <0-10>
+    },
+    "marketFit": {
+      "total": <0-100>,
+      "audienceMatch": <0-10>,
+      "brandAlignment": <0-10>,
+      "culturalRelevance": <0-10>,
+      "localizationQuality": <0-10>
+    },
+    "differentiation": {
+      "total": <0-100>,
+      "patternRepetition": <0-10>,
+      "uniquenessVsCompetitors": <0-10>,
+      "distinctPositioning": <0-10>
+    },
+    "performance": {
+      "total": <0-100>,
+      "firstImpressionScore": <0-10>,
+      "screenshotDropOff": <0-10>,
+      "likelyConversionRate": <0-10>
     },
     "hookTypeDistribution": {
       "benefitLed": <count>,
       "socialProof": <count>,
       "featureLed": <count>
     },
-    "conversionFunnelCoverage": {
-      "hook": true,
-      "features": true,
-      "socialProof": true,
-      "cta": true
+    "creativeNarrative": "<2-3 sentence analysis of overall creative approach>",
+    "dominantTone": "<e.g. Utility · Social Proof Hook>",
+    "positioningTag": "<e.g. feature-led · utility>"
+  },
+  "appText": {
+    "overallTextScore": <0-10>,
+    "uniqueness": <0-100>,
+    "strategicAssessment": "<3-4 sentence analysis>",
+    "industryBenchmarks": ["<insight 1 with % or stat>", "<insight 2>"],
+    "title": {
+      "score": <0-10>,
+      "currentValue": "<actual title>",
+      "length": "<X/30 characters>",
+      "utilization": "<percentage>%",
+      "primaryKeywords": ["<kw1>", "<kw2>"],
+      "strengths": ["<str>"],
+      "weaknesses": ["<weak>"],
+      "suggestions": ["<suggestion>"]
     },
-    "analysis": "<creative approach analysis>"
+    "subtitle": {
+      "score": <0-10>,
+      "currentValue": "<subtitle or Not set>",
+      "length": "<X/30 characters>",
+      "utilization": "<percentage>%",
+      "strengths": ["<str>"],
+      "weaknesses": ["<weak>"],
+      "suggestions": ["<suggestion>"]
+    },
+    "description": {
+      "score": <0-10>,
+      "length": "<X/4000 characters>",
+      "utilization": "<percentage>%",
+      "keywordDensity": "<X.X%>",
+      "openingLine": "<first sentence of description>",
+      "hasKeywordInFirstFold": <true|false>,
+      "hasStructuredFormatting": <true|false>,
+      "hasSocialProof": <true|false>,
+      "hasCTA": <true|false>,
+      "keywordsFound": ["<kw1>", "<kw2>", "<kw3>"],
+      "strengths": ["<str>"],
+      "weaknesses": ["<weak>"],
+      "suggestions": ["<suggestion>"]
+    },
+    "keywordFieldSuggestion": "<10 comma-separated keywords under 100 chars total, no spaces after commas>"
   },
   "screenshots": {
     "count": <number>,
-    "analysisNote": "<screenshot strategy overview>",
-    "strengths": ["<strength>"],
-    "weaknesses": ["<weakness>"],
+    "analysisNote": "<overview of screenshot strategy>",
+    "strengths": ["<str>"],
+    "weaknesses": ["<weak>"],
     "screens": [
       {
         "number": 1,
-        "purpose": "<purpose>",
+        "url": "<screenshot url if available>",
+        "hookType": "<benefit-led|social-proof|feature-led>",
+        "purpose": "<what this screen is trying to achieve>",
         "clarity": <0-10>,
         "stopPower": <0-10>,
         "keyElements": ["<element>"],
-        "feedback": "<feedback>"
+        "targetAudience": "<who this screen speaks to>",
+        "feedback": "<specific critique and what works/doesn't>"
       }
     ],
     "suggestions": ["<suggestion>"]
   },
   "competitors": {
+    "fieldAverages": {
+      "creativeStrategy": <0-100>,
+      "designVisuals": <0-100>,
+      "marketFit": <0-100>,
+      "differentiation": <0-100>,
+      "performance": <0-100>,
+      "overall": <0-100>,
+      "textScore": <0-10>
+    },
     "analysed": [
       {
         "name": "<competitor name>",
         "platform": "<ios|android>",
         "overallScore": <0-100>,
         "positioning": "<positioning strategy>",
-        "strengths": ["<strength>"],
-        "weaknesses": ["<weakness>"],
+        "positioningTag": "<e.g. feature-led · utility>",
+        "targetAudience": "<who they target>",
+        "strengths": ["<str>"],
+        "weaknesses": ["<weak>"],
         "dimensionScores": {
           "creativeStrategy": <0-100>,
           "designVisuals": <0-100>,
           "marketFit": <0-100>,
           "differentiation": <0-100>,
           "performance": <0-100>
+        },
+        "deltaVsYou": {
+          "creativeStrategy": <signed number, e.g. -16>,
+          "designVisuals": <signed number>,
+          "marketFit": <signed number>,
+          "differentiation": <signed number>,
+          "performance": <signed number>,
+          "overall": <signed number>
         }
       }
     ],
-    "competitiveLandscape": "<market analysis>"
+    "yourStrengthsVsField": ["<point 1>", "<point 2>"],
+    "yourWeaknessesVsField": ["<point 1>"],
+    "competitiveLandscape": "<2-3 sentence market analysis>"
   },
   "insights": {
+    "icp": {
+      "primarySegments": [
+        {
+          "name": "<segment name e.g. Metro convenience maximizers>",
+          "description": "<who they are and what they want>",
+          "appsTheyUse": ["<this app>", "<competitor if relevant>"]
+        }
+      ],
+      "untappedSegments": ["<segment 1>", "<segment 2>", "<segment 3>"],
+      "opportunities": ["<opp 1>", "<opp 2>", "<opp 3>", "<opp 4>", "<opp 5>"],
+      "threats": ["<threat 1>", "<threat 2>"]
+    },
     "topRecommendations": [
       {
         "priority": "CRITICAL",
-        "category": "KEYWORDS",
+        "category": "HOOK",
         "title": "<title>",
-        "description": "<description>",
+        "description": "<why this matters>",
         "actionItems": ["<action 1>", "<action 2>"],
-        "expectedImpact": "<expected outcome>"
+        "expectedImpact": "<outcome>"
       }
     ],
-    "whitespaceOpportunities": [
-      {
-        "title": "<opportunity>",
-        "description": "<description>",
-        "reasoning": "<why>"
-      }
-    ],
-    "oversusedPatterns": [
+    "whitespaceOpportunities": ["<opp 1>", "<opp 2>", "<opp 3>"],
+    "overusedPatterns": [
       {
         "pattern": "<pattern>",
-        "reason": "<why bad>",
-        "alternative": "<alternative>"
+        "reason": "<why it hurts>",
+        "alternative": "<what to do instead>"
       }
     ],
     "keywordAnalysis": {
