@@ -132,7 +132,13 @@ ${knowledge || 'Use your expert ASO knowledge.'}
 CRITICAL REQUIREMENTS:
 1. Return ONLY valid JSON array — no markdown, no explanation, start with [
 2. All scores must be numbers (0-100 for overview scores, 0-10 for sub-scores)
-3. Be extremely specific — quote actual text, give character counts
+3. Be extremely specific — reference actual text, give character counts
+0. STRICT JSON SAFETY — MOST IMPORTANT:
+   - NEVER use single quotes inside string values. Write: good keywords not 'good keywords'
+   - NEVER write examples as (e.g., 'x') — write (e.g., x) without any quotes
+   - NEVER use apostrophes/contractions — write do not, it is, cannot instead of don't, it's, can't
+   - NEVER add trailing commas after last array/object item
+   - NEVER add comments (// or /* */) inside the JSON
 4. Infer ICP segments from app name, category, description, and market context
 5. Quick wins must be ranked by impact/effort ratio (highest ROI first)
 6. Delta scores = this app's score minus field average across all analyzed apps
@@ -382,6 +388,32 @@ Return a JSON array, one object per app, with EXACTLY this structure:
 }`;
 }
 
+// Fixes unescaped double quotes inside JSON string values (char-by-char parser)
+function fixUnescapedQuotes(jsonStr) {
+  let result = '';
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < jsonStr.length; i++) {
+    const ch = jsonStr[i];
+    if (escaped) { result += ch; escaped = false; continue; }
+    if (ch === '\\') { result += ch; escaped = true; continue; }
+    if (ch === '"') {
+      if (!inString) { inString = true; result += ch; continue; }
+      let j = i + 1;
+      while (j < jsonStr.length && jsonStr[j] === ' ') j++;
+      const next = jsonStr[j];
+      if (next === ':' || next === ',' || next === '}' || next === ']' || next === '\n' || next === undefined) {
+        inString = false; result += ch;
+      } else {
+        result += '\\"';
+      }
+      continue;
+    }
+    result += ch;
+  }
+  return result;
+}
+
 // Main comparison analysis endpoint
 router.post('/compare', async (req, res) => {
   const { apps, userId, country = 'us' } = req.body;
@@ -440,8 +472,8 @@ router.post('/compare', async (req, res) => {
     jsonStr = jsonStr.replace(/\/\*[\s\S]*?\*\//g, '');
     // 3. Remove trailing commas before } or ]
     jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
-    // 4. Replace single-quoted strings with double-quoted
-    jsonStr = jsonStr.replace(/:\s*'([^']*)'/g, ': "$1"');
+    // 4. Fix unescaped double quotes inside string values (char-by-char)
+    jsonStr = fixUnescapedQuotes(jsonStr);
 
     let analysisData;
     try {
