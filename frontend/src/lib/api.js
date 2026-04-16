@@ -1,23 +1,13 @@
 const API_URL = import.meta.env.VITE_API_URL || '';
 
-async function request(path, options = {}, timeoutMs = 180000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(`${API_URL}${path}`, {
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      ...options,
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Request failed');
-    return data;
-  } catch (err) {
-    if (err.name === 'AbortError') throw new Error('Request timed out. The analysis is taking longer than expected — please try again.');
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
+async function request(path, options = {}) {
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
 }
 
 export const api = {
@@ -42,7 +32,7 @@ export const api = {
       body: JSON.stringify({ input, country }),
     }),
 
-  // Analyze apps (no userId needed)
+  // Analyze apps (no userId)
   analyzeApps: (apps, country = 'us') =>
     request('/api/analyze/compare', {
       method: 'POST',
@@ -52,15 +42,17 @@ export const api = {
   // Get countries list
   getCountries: () => request('/api/app/countries'),
 
-  // History (global, no userId)
+  // History (shared, no userId)
   getHistory: (page = 1) =>
-    request(`/api/history/all?page=${page}`),
+    request(`/api/history?page=${page}`),
 
   getHistoryEntry: (id) =>
     request(`/api/history/entry/${id}`),
 
   deleteHistoryEntry: (id) =>
-    request(`/api/history/entry/${id}`, { method: 'DELETE' }),
+    request(`/api/history/entry/${id}`, {
+      method: 'DELETE',
+    }),
 
   health: () => request('/api/health'),
 };
