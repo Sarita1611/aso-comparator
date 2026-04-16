@@ -388,31 +388,47 @@ Return a JSON array, one object per app, with EXACTLY this structure:
 }`;
 }
 
-// Fixes unescaped double quotes inside JSON string values (char-by-char parser)
-function fixUnescapedQuotes(jsonStr) {
+// Single-pass JSON sanitizer: fixes control chars inside strings + unescaped double quotes
+function sanitizeJson(jsonStr) {
   let result = '';
   let inString = false;
   let escaped = false;
+
   for (let i = 0; i < jsonStr.length; i++) {
     const ch = jsonStr[i];
+    const code = ch.charCodeAt(0);
+
     if (escaped) { result += ch; escaped = false; continue; }
     if (ch === '\\') { result += ch; escaped = true; continue; }
+
     if (ch === '"') {
       if (!inString) { inString = true; result += ch; continue; }
+      // Check if this quote closes the string or is an unescaped inner quote
       let j = i + 1;
       while (j < jsonStr.length && jsonStr[j] === ' ') j++;
       const next = jsonStr[j];
-      if (next === ':' || next === ',' || next === '}' || next === ']' || next === '\n' || next === undefined) {
+      if (next === ':' || next === ',' || next === '}' || next === ']' || next === '\n' || j >= jsonStr.length) {
         inString = false; result += ch;
       } else {
-        result += '\\"';
+        result += '\\"'; // escape the inner quote
       }
       continue;
     }
+
+    // Inside a string: escape control characters instead of passing them raw
+    if (inString && code < 0x20) {
+      if (code === 0x0A) result += '\\n';
+      else if (code === 0x0D) result += '\\r';
+      else if (code === 0x09) result += '\\t';
+      // drop other control chars
+      continue;
+    }
+
     result += ch;
   }
   return result;
 }
+
 
 // Main comparison analysis endpoint
 router.post('/compare', async (req, res) => {
@@ -472,15 +488,8 @@ router.post('/compare', async (req, res) => {
     jsonStr = jsonStr.replace(/\/\*[\s\S]*?\*\//g, '');
     // 3. Remove trailing commas before } or ]
     jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
-    // 4. Replace literal control characters (newlines, tabs) inside strings
-    jsonStr = jsonStr.replace(/[\x00-\x1F\x7F]/g, (ch) => {
-      if (ch === '\n') return '\\n';
-      if (ch === '\r') return '\\r';
-      if (ch === '\t') return '\\t';
-      return '';
-    });
-    // 5. Fix unescaped double quotes inside string values (char-by-char)
-    jsonStr = fixUnescapedQuotes(jsonStr);
+    // 4. Fix control chars inside strings + unescaped double quotes (single char-by-char pass)
+    jsonStr = sanitizeJson(jsonStr);
 
     let analysisData;
     try {
