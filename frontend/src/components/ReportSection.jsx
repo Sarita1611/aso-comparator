@@ -282,8 +282,8 @@ function OverviewTab({ apps }) {
                       <div key={ai} className={`flex items-center gap-3 p-3 rounded-xl ${isYou ? 'bg-brand-500/10 border border-brand-500/30' : 'bg-slate-50'}`}>
                         {a.icon && <img src={a.icon} alt={a.name} className="w-8 h-8 rounded-xl flex-shrink-0" />}
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-slate-800 truncate">{a.name} {isYou && <span className="text-brand-400 text-xs">(YOU)</span>}</p>
-                          <div className="flex-1 h-1.5 bg-slate-200 rounded-full mt-1.5">
+                          <p className="text-xs font-semibold text-slate-800 truncate mb-1.5">{a.name} {isYou && <span className="text-brand-400 text-xs">(YOU)</span>}</p>
+                          <div className="w-full h-1.5 bg-slate-200 rounded-full">
                             <div className="h-full rounded-full bg-brand-500" style={{ width: `${score}%` }} />
                           </div>
                         </div>
