@@ -113,7 +113,7 @@ Rating: ${app.rating} (${app.ratingCount} reviews)
 Title: "${app.title}"
 Subtitle: "${app.subtitle}"
 Description length: ${app.description?.length || 0} chars
-Description (first 500 chars): "${app.description?.slice(0, 500) || ''}"
+Description (first 500 chars): "${(app.description || '').slice(0, 500).replace(/[\x00-\x09\x0B\x0C\x0E-\x1F\x7F]/g, ' ').replace(/\n/g, ' ').replace(/\r/g, '').replace(/"/g, '\\"').trim()}"
 Screenshots: ${app.screenshotCount || 0}
 Screenshot URLs: ${JSON.stringify(app.screenshots || [])}
 Last Updated: ${app.lastUpdated}
@@ -472,7 +472,14 @@ router.post('/compare', async (req, res) => {
     jsonStr = jsonStr.replace(/\/\*[\s\S]*?\*\//g, '');
     // 3. Remove trailing commas before } or ]
     jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
-    // 4. Fix unescaped double quotes inside string values (char-by-char)
+    // 4. Replace literal control characters (newlines, tabs) inside strings
+    jsonStr = jsonStr.replace(/[\x00-\x1F\x7F]/g, (ch) => {
+      if (ch === '\n') return '\\n';
+      if (ch === '\r') return '\\r';
+      if (ch === '\t') return '\\t';
+      return '';
+    });
+    // 5. Fix unescaped double quotes inside string values (char-by-char)
     jsonStr = fixUnescapedQuotes(jsonStr);
 
     let analysisData;
