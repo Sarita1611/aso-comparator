@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { BarChart3, History, Zap } from 'lucide-react';
+import { BarChart3, History } from 'lucide-react';
 
 export default function Navbar() {
   const location = useLocation();
@@ -10,13 +10,8 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center shadow-sm group-hover:bg-brand-700 transition-colors">
-              <Zap size={16} className="text-white" />
-            </div>
-            <span className="font-display font-700 text-lg text-slate-800">
-              ASO<span className="text-brand-600">vision</span>
-            </span>
+          <Link to="/" className="flex items-center group">
+              <img src="/logo.png" alt="PiiX" className="h-8" />
           </Link>
 
           {/* Nav links */}
