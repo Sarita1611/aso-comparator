@@ -420,13 +420,36 @@ router.post('/compare', async (req, res) => {
     }
 
     // Strip markdown fences and parse JSON
-    const cleaned = analysisText.replace(/```json|```/g, '').trim();
+    let cleaned = analysisText
+      .replace(/```json\s*/gi, '')
+      .replace(/```\s*/g, '')
+      .trim();
+
+    // Extract the JSON array or object
     const jsonMatch = cleaned.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('Could not extract JSON from AI response');
     }
 
-    const analysisData = JSON.parse(jsonMatch[0]);
+    let jsonStr = jsonMatch[0];
+
+    // Fix common AI JSON issues:
+    // 1. Remove single-line comments (// ...)
+    jsonStr = jsonStr.replace(/\/\/[^\n]*/g, '');
+    // 2. Remove multi-line comments (/* ... */)
+    jsonStr = jsonStr.replace(/\/\*[\s\S]*?\*\//g, '');
+    // 3. Remove trailing commas before } or ]
+    jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
+    // 4. Replace single-quoted strings with double-quoted
+    jsonStr = jsonStr.replace(/:\s*'([^']*)'/g, ': "$1"');
+
+    let analysisData;
+    try {
+      analysisData = JSON.parse(jsonStr);
+    } catch (parseErr) {
+      console.error('[Analyze] JSON parse failed. Raw snippet:', jsonStr.slice(1300, 1400));
+      throw new Error(`AI returned malformed JSON: ${parseErr.message}`);
+    }
     const analysisArray = Array.isArray(analysisData) ? analysisData : [analysisData];
 
     // Build final report
