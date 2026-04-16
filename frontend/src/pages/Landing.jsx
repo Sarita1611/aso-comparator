@@ -3,14 +3,12 @@ import { Plus, Loader2, Zap, BarChart3, Sparkles, RotateCcw, Download, Globe, Ch
 import AppInputCard from '../components/AppInputCard';
 import ReportSection from '../components/ReportSection';
 import { api } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
 import { exportReportToPDF } from '../components/PDFExport';
 import { Link } from 'react-router-dom';
 
 const MAX_APPS = 4;
 
 export default function Landing() {
-  const { user } = useAuth();
   const [slots, setSlots] = useState([null, null]);
   const [analyzing, setAnalyzing] = useState(false);
   const [report, setReport] = useState(null);
@@ -59,7 +57,7 @@ export default function Landing() {
     setError('');
     setReport(null);
     try {
-      const result = await api.analyzeApps(apps, user?.id, selectedCountry.code);
+      const result = await api.analyzeApps(apps, selectedCountry.code);
       setReport(result.report);
       setFetchedApps(apps);
       setTimeout(() => {
@@ -105,11 +103,7 @@ export default function Landing() {
           <p className="text-slate-500 text-base max-w-xl mx-auto">
             Enter up to 4 apps and get a detailed AI-powered ASO comparison — scores, keyword analysis, competitor gaps, and actionable roadmaps.
           </p>
-          {!user && (
-            <p className="text-xs text-slate-400 mt-3">
-              <Link to="/register" className="text-brand-500 hover:underline font-medium">Sign up free</Link> to save reports and access history
-            </p>
-          )}
+
         </div>
       )}
 
@@ -251,13 +245,6 @@ export default function Landing() {
             </button>
           </div>
 
-          {!user && (
-            <div className="mt-6 p-4 bg-brand-50 border border-brand-200 rounded-2xl text-center">
-              <p className="text-sm text-brand-800 font-medium mb-1">Want to save this report?</p>
-              <p className="text-xs text-brand-600 mb-3">Create a free account to access your history anytime</p>
-              <Link to="/register" className="btn-primary text-sm"><Zap size={14} /> Create Free Account</Link>
-            </div>
-          )}
         </div>
       )}
     </div>
