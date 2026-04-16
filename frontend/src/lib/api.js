@@ -27,4 +27,7 @@ export const api = {
 
   deleteHistoryEntry: (id) =>
     request(`/api/history/entry/${id}`, { method: 'DELETE' }),
+
+  getCountries: () =>
+    request('/api/app/countries'),
 };
