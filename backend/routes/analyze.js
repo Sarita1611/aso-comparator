@@ -113,7 +113,7 @@ Rating: ${app.rating} (${app.ratingCount} reviews)
 Title: "${app.title}"
 Subtitle: "${app.subtitle}"
 Description length: ${app.description?.length || 0} chars
-Description (first 500 chars): "${(app.description || '').slice(0, 500).replace(/[\x00-\x09\x0B\x0C\x0E-\x1F\x7F]/g, ' ').replace(/\n/g, ' ').replace(/\r/g, '').replace(/"/g, '\\"').trim()}"
+Description (first 500 chars): "${app.description?.slice(0, 500) || ''}"
 Screenshots: ${app.screenshotCount || 0}
 Screenshot URLs: ${JSON.stringify(app.screenshots || [])}
 Last Updated: ${app.lastUpdated}
@@ -132,13 +132,7 @@ ${knowledge || 'Use your expert ASO knowledge.'}
 CRITICAL REQUIREMENTS:
 1. Return ONLY valid JSON array — no markdown, no explanation, start with [
 2. All scores must be numbers (0-100 for overview scores, 0-10 for sub-scores)
-3. Be extremely specific — reference actual text, give character counts
-0. STRICT JSON SAFETY — MOST IMPORTANT:
-   - NEVER use single quotes inside string values. Write: good keywords not 'good keywords'
-   - NEVER write examples as (e.g., 'x') — write (e.g., x) without any quotes
-   - NEVER use apostrophes/contractions — write do not, it is, cannot instead of don't, it's, can't
-   - NEVER add trailing commas after last array/object item
-   - NEVER add comments (// or /* */) inside the JSON
+3. Be extremely specific — quote actual text, give character counts
 4. Infer ICP segments from app name, category, description, and market context
 5. Quick wins must be ranked by impact/effort ratio (highest ROI first)
 6. Delta scores = this app's score minus field average across all analyzed apps
@@ -388,51 +382,9 @@ Return a JSON array, one object per app, with EXACTLY this structure:
 }`;
 }
 
-// Single-pass JSON sanitizer: fixes control chars inside strings + unescaped double quotes
-function sanitizeJson(jsonStr) {
-  let result = '';
-  let inString = false;
-  let escaped = false;
-
-  for (let i = 0; i < jsonStr.length; i++) {
-    const ch = jsonStr[i];
-    const code = ch.charCodeAt(0);
-
-    if (escaped) { result += ch; escaped = false; continue; }
-    if (ch === '\\') { result += ch; escaped = true; continue; }
-
-    if (ch === '"') {
-      if (!inString) { inString = true; result += ch; continue; }
-      // Check if this quote closes the string or is an unescaped inner quote
-      let j = i + 1;
-      while (j < jsonStr.length && jsonStr[j] === ' ') j++;
-      const next = jsonStr[j];
-      if (next === ':' || next === ',' || next === '}' || next === ']' || next === '\n' || j >= jsonStr.length) {
-        inString = false; result += ch;
-      } else {
-        result += '\\"'; // escape the inner quote
-      }
-      continue;
-    }
-
-    // Inside a string: escape control characters instead of passing them raw
-    if (inString && code < 0x20) {
-      if (code === 0x0A) result += '\\n';
-      else if (code === 0x0D) result += '\\r';
-      else if (code === 0x09) result += '\\t';
-      // drop other control chars
-      continue;
-    }
-
-    result += ch;
-  }
-  return result;
-}
-
-
 // Main comparison analysis endpoint
 router.post('/compare', async (req, res) => {
-  const { apps, userId, country = 'us' } = req.body;
+  const { apps, country = 'us' } = req.body;
 
   if (!apps || apps.length === 0) {
     return res.status(400).json({ error: 'At least one app required' });
@@ -468,36 +420,13 @@ router.post('/compare', async (req, res) => {
     }
 
     // Strip markdown fences and parse JSON
-    let cleaned = analysisText
-      .replace(/```json\s*/gi, '')
-      .replace(/```\s*/g, '')
-      .trim();
-
-    // Extract the JSON array or object
+    const cleaned = analysisText.replace(/```json|```/g, '').trim();
     const jsonMatch = cleaned.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('Could not extract JSON from AI response');
     }
 
-    let jsonStr = jsonMatch[0];
-
-    // Fix common AI JSON issues:
-    // 1. Remove single-line comments (// ...)
-    jsonStr = jsonStr.replace(/\/\/[^\n]*/g, '');
-    // 2. Remove multi-line comments (/* ... */)
-    jsonStr = jsonStr.replace(/\/\*[\s\S]*?\*\//g, '');
-    // 3. Remove trailing commas before } or ]
-    jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
-    // 4. Fix control chars inside strings + unescaped double quotes (single char-by-char pass)
-    jsonStr = sanitizeJson(jsonStr);
-
-    let analysisData;
-    try {
-      analysisData = JSON.parse(jsonStr);
-    } catch (parseErr) {
-      console.error('[Analyze] JSON parse failed. Raw snippet:', jsonStr.slice(1300, 1400));
-      throw new Error(`AI returned malformed JSON: ${parseErr.message}`);
-    }
+    const analysisData = JSON.parse(jsonMatch[0]);
     const analysisArray = Array.isArray(analysisData) ? analysisData : [analysisData];
 
     // Build final report
@@ -513,7 +442,7 @@ router.post('/compare', async (req, res) => {
       }
     };
 
-    // Save to history (always, no auth required)
+    // Save to history (shared, no user required)
     try {
       const winner = analysisArray.length > 1
         ? (analysisArray[0]?.overview?.overallScore >= (analysisArray[1]?.overview?.overallScore || 0)
@@ -532,7 +461,7 @@ router.post('/compare', async (req, res) => {
 
       if (saveError) console.error('[Analyze] Save history error:', saveError);
     } catch (saveErr) {
-      console.error('[Analyze] History save exception:', saveErr);
+      console.error('[Analyze] History save failed (non-fatal):', saveErr.message);
     }
 
     res.json({ success: true, report });
