@@ -32,6 +32,9 @@ export default function Navbar() {
               History
             </Link>
           </nav>
+          <a href="https://piix.ai" target="_blank" rel="noopener noreferrer" className="btn-ghost text-sm">
+            ← Back to PiiX.ai
+          </a>
         </div>
       </div>
     </header>
