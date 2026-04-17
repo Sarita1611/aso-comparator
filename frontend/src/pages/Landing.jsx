@@ -192,8 +192,7 @@ export default function Landing() {
               }
             </button>
           </div>
-          <p className="text-xs text-slate-400 mt-6 text-center">©Copyright 2026 - Piix.ai. All Rights Reserved.</p>
-          <P className="text-xs text-slate-400 mt- text-center">Made in India for the world.</p>
+          <p className="text-xs text-slate-400 mt-6 text-center">©Copyright 2026 - Piix.ai. All Rights Reserved. Made in India for the world.</p>
         </div>
       )}
 
