@@ -98,7 +98,7 @@ export default function Landing() {
           </div>
           
           <h1 className="font-display font-bold text-4xl text-slate-800 mb-3">
-            Compare App Store <span className="text-gradient">Optimization</span> Like Never Before
+            Compare App Store Optimization <span className="text-gradient">Like Never Before</span> 
           </h1>
           <p className="text-slate-500 text-base max-w-xl mx-auto">
             Enter up to 4 apps and get a detailed AI-powered ASO comparison — scores, keyword analysis, competitor gaps, and actionable roadmaps.
@@ -188,7 +188,7 @@ export default function Landing() {
             <button onClick={handleAnalyze} disabled={!canAnalyze || analyzing} className="btn-primary px-8 py-3.5 text-base">
               {analyzing
                 ? <><Loader2 size={18} className="animate-spin" /> Analyzing with AI...</>
-                : <><Zap size={18} /> Analyze {filledSlots.length > 0 ? `${filledSlots.length} App${filledSlots.length > 1 ? 's' : ''}` : 'Apps'} in {selectedCountry.name}</>
+                <><Zap size={18} /> Start ASO Analysis</>
               }
             </button>
           </div>
