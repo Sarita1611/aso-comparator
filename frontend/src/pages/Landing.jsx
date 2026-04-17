@@ -96,7 +96,7 @@ export default function Landing() {
           <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-brand-50 border border-brand-200 rounded-full text-xs font-medium text-brand-700 mb-4">
             <Sparkles size={12} /> AI-Powered ASO Analysis with RAG
           </div>
-          <p className="text-xs text-slate-400 mt-1">Powered by Mobavenue</p>
+          
           <h1 className="font-display font-bold text-4xl text-slate-800 mb-3">
             Compare App Store <span className="text-gradient">Optimization</span>
           </h1>
@@ -192,7 +192,7 @@ export default function Landing() {
               }
             </button>
           </div>
-          <p className="text-xs text-slate-400 mt-1 text-center">Powered by Mobavenue</p>
+          <p className="text-xs text-slate-400 mt-6 text-center">Powered by Mobavenue</p>
 
           
         </div>
