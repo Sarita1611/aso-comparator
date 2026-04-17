@@ -96,6 +96,7 @@ export default function Landing() {
           <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-brand-50 border border-brand-200 rounded-full text-xs font-medium text-brand-700 mb-4">
             <Sparkles size={12} /> AI-Powered ASO Analysis with RAG
           </div>
+          <p className="text-xs text-slate-400 mt-1">Powered by Mobavenue</p>
           <h1 className="font-display font-bold text-4xl text-slate-800 mb-3">
             Compare App Store <span className="text-gradient">Optimization</span>
           </h1>
@@ -192,24 +193,7 @@ export default function Landing() {
             </button>
           </div>
 
-          {analyzing && (
-            <div className="mt-6 text-center animate-fade-in">
-              <div className="inline-flex flex-col items-center gap-3 p-5 bg-white rounded-2xl border border-surface-200 shadow-card">
-                <div className="flex items-center gap-3">
-                  <Loader2 size={18} className="animate-spin text-brand-500" />
-                  <span className="text-sm font-medium text-slate-700">Running AI analysis for {selectedCountry.name}...</span>
-                </div>
-                <div className="space-y-1 text-xs text-slate-400 text-center">
-                  <p>📚 Retrieving ASO knowledge base</p>
-                  <p>🌍 Applying {selectedCountry.name} market context</p>
-                  <p>🔍 Generating keyword suggestions & competitor gaps</p>
-                  <p>📊 Scoring 7 ASO pillars per app</p>
-                  <p>🗺️ Building improvement roadmaps</p>
-                </div>
-                <p className="text-xs text-slate-400 italic">This takes 20-40 seconds</p>
-              </div>
-            </div>
-          )}
+          
         </div>
       )}
 
