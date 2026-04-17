@@ -2,15 +2,14 @@ import { useState, useRef, useEffect } from 'react';
 import { Search, X, Loader2, AlertCircle, Smartphone, Star } from 'lucide-react';
 import { api } from '../lib/api';
 
-const PLATFORM_OPTIONS = [
-  { value: 'both', label: 'Both', icon: '🔍' },
-  { value: 'ios', label: 'iOS', icon: '🍎' },
-  { value: 'android', label: 'Android', icon: '🤖' },
-];
+// const PLATFORM_OPTIONS = [
+//   { value: 'both', label: 'Both', icon: '🔍' },
+//   { value: 'ios', label: 'iOS', icon: '🍎' },
+//   { value: 'android', label: 'Android', icon: '🤖' },
+// ];
 
 export default function AppInputCard({ index, appData, onAppFetched, onRemove, canRemove, country }) {
   const [query, setQuery] = useState('');
-  const [platform, setPlatform] = useState('both');
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searching, setSearching] = useState(false);
@@ -41,7 +40,7 @@ export default function AppInputCard({ index, appData, onAppFetched, onRemove, c
     searchTimeout.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const { results } = await api.searchApps(query.trim(), platform, country);
+        const { results } = await api.searchApps(query.trim(), 'both', country);
         setSuggestions(results || []);
         setShowSuggestions(true);
       } catch (err) {
@@ -51,7 +50,7 @@ export default function AppInputCard({ index, appData, onAppFetched, onRemove, c
       }
     }, 350);
     return () => clearTimeout(searchTimeout.current);
-  }, [query, platform, country]);
+  }, [query, country]);
 
   const handleSelectSuggestion = async (suggestion) => {
     setShowSuggestions(false);
@@ -140,23 +139,7 @@ export default function AppInputCard({ index, appData, onAppFetched, onRemove, c
         </div>
       ) : (
         <>
-          {/* Platform Selector */}
-          <div className="flex gap-1.5 mb-3">
-            {PLATFORM_OPTIONS.map(opt => (
-              <button
-                key={opt.value}
-                onClick={() => setPlatform(opt.value)}
-                className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                  platform === opt.value
-                    ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
-                    : 'bg-white text-slate-600 border-surface-200 hover:border-brand-300 hover:text-brand-600'
-                }`}
-              >
-                <span>{opt.icon}</span>
-                {opt.label}
-              </button>
-            ))}
-          </div>
+         
 
           {/* Search with Autocomplete */}
           <div className="relative" ref={wrapperRef}>
@@ -173,7 +156,7 @@ export default function AppInputCard({ index, appData, onAppFetched, onRemove, c
                 value={query}
                 onChange={(e) => { setQuery(e.target.value); setError(''); }}
                 onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                placeholder={`Search ${platform === 'both' ? 'App Store & Play Store' : platform === 'ios' ? 'App Store' : 'Play Store'}...`}
+                placeholder="Search App Store & Play Store..."
                 className="input-field pl-9 pr-4"
                 disabled={fetching}
               />
