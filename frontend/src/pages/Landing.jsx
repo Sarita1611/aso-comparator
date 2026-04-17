@@ -192,6 +192,7 @@ export default function Landing() {
               }
             </button>
           </div>
+          <p className="text-xs text-slate-400 mt-1">Powered by Mobavenue</p>
 
           
         </div>
