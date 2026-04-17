@@ -94,11 +94,11 @@ export default function Landing() {
       {!report && (
         <div className="text-center mb-8 animate-fade-in">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-brand-50 border border-brand-200 rounded-full text-xs font-medium text-brand-700 mb-4">
-            <Sparkles size={12} /> AI-Powered ASO Analysis with RAG
+            <Sparkles size={12} /> AI-Powered ASO Analysis by piix.ai
           </div>
           
           <h1 className="font-display font-bold text-4xl text-slate-800 mb-3">
-            Compare App Store <span className="text-gradient">Optimization</span>
+            Compare App Store <span className="text-gradient">Optimization</span> Like Never Before
           </h1>
           <p className="text-slate-500 text-base max-w-xl mx-auto">
             Enter up to 4 apps and get a detailed AI-powered ASO comparison — scores, keyword analysis, competitor gaps, and actionable roadmaps.
@@ -192,9 +192,8 @@ export default function Landing() {
               }
             </button>
           </div>
-          <p className="text-xs text-slate-400 mt-6 text-center">Powered by Mobavenue</p>
-
-          
+          <p className="text-xs text-slate-400 mt-6 text-center">©Copyright 2026 - Piix.ai. All Rights Reserved.</p>
+          <P className="text-xs text-slate-400 mt- text-center">Made in India for the world.</p>
         </div>
       )}
 
