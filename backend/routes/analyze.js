@@ -193,6 +193,7 @@ CRITICAL REQUIREMENTS:
 12. primarySegments in ICP must have minimum 3 segments
 13. keywordAnalysis.suggested must have minimum 8 keywords
 14. Every text field must be fully written out — never truncate with "..."
+15. topASOKeywords must have exactly 15 items — these are the words doing the MOST ASO work for this specific app, drawn from its actual title, subtitle, and description text. Score each by its real algorithmic value: title placement = highest weight, subtitle = medium, description = lower. A keyword that appears in the title but is generic scores lower than a niche keyword perfectly placed in the title.
 
 Return a JSON array, one object per app, with EXACTLY this structure:
 
@@ -378,6 +379,20 @@ Return a JSON array, one object per app, with EXACTLY this structure:
     "yourWeaknessesVsField": ["<point 1>"],
     "competitiveLandscape": "<2-3 sentence market analysis>"
   },
+  "topASOKeywords": [
+    {
+      "keyword": "<the keyword or 2-3 word phrase>",
+      "asoScore": "<0-100, overall ASO value>",
+      "placement": "<title|subtitle|description|missing>",
+      "placementWeight": "<high|medium|low>",
+      "searchVolume": "<high|medium|low>",
+      "competition": "<high|medium|low>",
+      "intent": "<e.g. navigational, transactional, informational>",
+      "isWasted": "<true if high-value keyword buried in description when it should be in title/subtitle>",
+      "wastedReason": "<why it is wasted, or null if not wasted>",
+      "recommendation": "<one specific action: move to title, add to subtitle, keep as-is, remove, etc.>"
+    }
+  ],
   "insights": {
     "icp": {
       "primarySegments": [
