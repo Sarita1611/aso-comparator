@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BarChart3, FileText, Zap, Image, Users, Lightbulb, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp } from 'lucide-react';
+import { BarChart3, FileText, Zap, Image, Users, Lightbulb, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, Key } from 'lucide-react';
 import ScoreRing, { PillarScoreBar } from './ScoreCard';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer,
@@ -14,6 +14,7 @@ const TABS = [
   { id: 'screenshots', label: 'Screenshots', icon: Image },
   { id: 'competitors', label: 'Competitors', icon: Users },
   { id: 'insights', label: 'Insights', icon: Lightbulb },
+  { id: 'keywords', label: 'Top Keywords', icon: Key },
 ];
 
 const PRIORITY_COLORS = {
@@ -1290,6 +1291,300 @@ function InsightsTab({ apps }) {
   );
 }
 
+// ─── TOP ASO KEYWORDS TAB ─────────────────────────────────────────────────────
+
+const PLACEMENT_META = {
+  title:       { label: 'Title',       color: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30', dot: 'bg-emerald-400' },
+  subtitle:    { label: 'Subtitle',    color: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',         dot: 'bg-blue-400' },
+  description: { label: 'Description', color: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',     dot: 'bg-amber-400' },
+  missing:     { label: 'Missing',     color: 'bg-red-500/15 text-red-400 border border-red-500/30',           dot: 'bg-red-400' },
+};
+
+const VOL_COLORS = {
+  high:   'text-emerald-400',
+  medium: 'text-amber-400',
+  low:    'text-slate-400',
+};
+
+function AsoScoreBar({ score }) {
+  const s = Number(score) || 0;
+  const color = s >= 75 ? 'bg-emerald-500' : s >= 50 ? 'bg-amber-500' : 'bg-red-500';
+  return (
+    <div className="flex items-center gap-2 w-full">
+      <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${Math.min(s, 100)}%` }} />
+      </div>
+      <span className="text-xs font-bold tabular-nums text-slate-700 w-7 text-right">{s}</span>
+    </div>
+  );
+}
+
+function KeywordRow({ kw, rank }) {
+  const placement = (kw.placement || 'missing').toLowerCase();
+  const meta = PLACEMENT_META[placement] || PLACEMENT_META.missing;
+  const isWasted = kw.isWasted === true || kw.isWasted === 'true';
+
+  return (
+    <tr className={`border-b border-slate-100 transition-colors hover:bg-slate-50/70 ${isWasted ? 'bg-amber-50/40' : ''}`}>
+      {/* Rank */}
+      <td className="py-3 pl-4 pr-2 w-8">
+        <span className="text-xs font-bold text-slate-400 tabular-nums">{rank}</span>
+      </td>
+
+      {/* Keyword */}
+      <td className="py-3 pr-4 min-w-[130px]">
+        <div className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${meta.dot}`} />
+          <span className="text-sm font-semibold text-slate-800">{kw.keyword}</span>
+          {isWasted && (
+            <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 border border-amber-500/30 flex-shrink-0">
+              WASTED
+            </span>
+          )}
+        </div>
+      </td>
+
+      {/* ASO Score bar */}
+      <td className="py-3 pr-4 w-40">
+        <AsoScoreBar score={kw.asoScore} />
+      </td>
+
+      {/* Placement */}
+      <td className="py-3 pr-4 w-28">
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${meta.color}`}>
+          {meta.label}
+        </span>
+      </td>
+
+      {/* Volume / Competition */}
+      <td className="py-3 pr-4 w-28">
+        <div className="flex flex-col gap-0.5">
+          <span className={`text-xs font-medium capitalize ${VOL_COLORS[(kw.searchVolume||'').toLowerCase()] || 'text-slate-400'}`}>
+            Vol: {kw.searchVolume || '—'}
+          </span>
+          <span className="text-xs text-slate-400 capitalize">Comp: {kw.competition || '—'}</span>
+        </div>
+      </td>
+
+      {/* Intent */}
+      <td className="py-3 pr-4 w-32 hidden xl:table-cell">
+        <span className="text-xs text-slate-500 capitalize">{kw.intent || '—'}</span>
+      </td>
+
+      {/* Recommendation */}
+      <td className="py-3 pr-4">
+        <p className="text-xs text-slate-600 leading-relaxed">{kw.recommendation || '—'}</p>
+        {isWasted && kw.wastedReason && (
+          <p className="text-xs text-amber-500 mt-0.5 leading-relaxed">⚠ {kw.wastedReason}</p>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function PlacementLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
+      {Object.entries(PLACEMENT_META).map(([key, val]) => (
+        <div key={key} className="flex items-center gap-1.5">
+          <span className={`w-2 h-2 rounded-full ${val.dot}`} />
+          <span>{val.label}</span>
+        </div>
+      ))}
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 border border-amber-500/30">WASTED</span>
+        <span>High-value keyword in wrong place</span>
+      </div>
+    </div>
+  );
+}
+
+function TopKeywordsTab({ apps }) {
+  const [sortBy, setSortBy] = useState('asoScore');
+  const [filterWasted, setFilterWasted] = useState(false);
+
+  return (
+    <div className="space-y-6 pb-8">
+
+      {/* Cross-app comparison — only when 2+ apps */}
+      {apps.length > 1 && (() => {
+        // Build a unified keyword map: keyword -> { apps that have it, max score, placements }
+        const kwMap = {};
+        apps.forEach((app) => {
+          (app.analysis?.topASOKeywords || []).forEach((kw) => {
+            if (!kwMap[kw.keyword]) kwMap[kw.keyword] = { keyword: kw.keyword, apps: [] };
+            kwMap[kw.keyword].apps.push({
+              name: app.name,
+              icon: app.icon,
+              score: Number(kw.asoScore) || 0,
+              placement: kw.placement,
+              isWasted: kw.isWasted === true || kw.isWasted === 'true',
+            });
+          });
+        });
+
+        // Only show keywords that appear in 2+ apps (shared battleground keywords)
+        const shared = Object.values(kwMap).filter(k => k.apps.length >= 2);
+        if (!shared.length) return null;
+
+        return (
+          <SectionCard>
+            <h4 className="text-sm font-bold text-slate-800 mb-1">Shared Keyword Battleground</h4>
+            <p className="text-xs text-slate-500 mb-4">Keywords both apps are targeting — see who's winning the placement war</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                    <th className="text-left pb-3 font-medium">Keyword</th>
+                    {apps.map((a, i) => (
+                      <th key={i} className="text-center pb-3 font-medium px-2">
+                        <div className="flex items-center justify-center gap-1">
+                          {a.icon && <img src={a.icon} alt="" className="w-4 h-4 rounded" />}
+                          <span className="truncate max-w-[80px]">{a.name.split(':')[0]}</span>
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {shared.sort((a, b) => Math.max(...b.apps.map(x => x.score)) - Math.max(...a.apps.map(x => x.score))).slice(0, 12).map((row, i) => (
+                    <tr key={i} className="hover:bg-slate-50/70">
+                      <td className="py-2.5 font-semibold text-slate-800">{row.keyword}</td>
+                      {apps.map((a, ai) => {
+                        const match = row.apps.find(x => x.name === a.name);
+                        if (!match) return <td key={ai} className="py-2.5 text-center text-slate-300">—</td>;
+                        const placementMeta = PLACEMENT_META[(match.placement || 'missing').toLowerCase()] || PLACEMENT_META.missing;
+                        return (
+                          <td key={ai} className="py-2.5 text-center px-2">
+                            <div className="flex flex-col items-center gap-1">
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${placementMeta.color}`}>
+                                {placementMeta.label}
+                              </span>
+                              <span className="text-xs font-bold text-slate-700 tabular-nums">{match.score}</span>
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </SectionCard>
+        );
+      })()}
+
+      {/* Per-app keyword tables */}
+      {apps.map((app, idx) => {
+        const rawKeywords = app.analysis?.topASOKeywords || [];
+
+        let keywords = [...rawKeywords];
+
+        if (filterWasted) {
+          keywords = keywords.filter(k => k.isWasted === true || k.isWasted === 'true');
+        }
+
+        if (sortBy === 'asoScore') {
+          keywords.sort((a, b) => (Number(b.asoScore) || 0) - (Number(a.asoScore) || 0));
+        } else if (sortBy === 'wasted') {
+          keywords.sort((a, b) => {
+            const aw = a.isWasted === true || a.isWasted === 'true' ? 1 : 0;
+            const bw = b.isWasted === true || b.isWasted === 'true' ? 1 : 0;
+            return bw - aw;
+          });
+        } else if (sortBy === 'placement') {
+          const order = { title: 0, subtitle: 1, description: 2, missing: 3 };
+          keywords.sort((a, b) => (order[a.placement] ?? 9) - (order[b.placement] ?? 9));
+        }
+
+        const wastedCount = rawKeywords.filter(k => k.isWasted === true || k.isWasted === 'true').length;
+        const titleCount = rawKeywords.filter(k => (k.placement || '').toLowerCase() === 'title').length;
+        const missingCount = rawKeywords.filter(k => (k.placement || '').toLowerCase() === 'missing').length;
+        const avgScore = rawKeywords.length
+          ? Math.round(rawKeywords.reduce((s, k) => s + (Number(k.asoScore) || 0), 0) / rawKeywords.length)
+          : 0;
+
+        return (
+          <div key={idx} className="space-y-4">
+            <SectionCard>
+              <AppHeader app={app} />
+
+              {/* Stats row */}
+              <div className="grid grid-cols-4 gap-3 mb-5">
+                {[
+                  { label: 'Avg ASO Score', value: avgScore, suffix: '/100', highlight: avgScore >= 70 ? 'text-emerald-500' : avgScore >= 50 ? 'text-amber-500' : 'text-red-500' },
+                  { label: 'In Title', value: titleCount, suffix: ` / ${rawKeywords.length}`, highlight: 'text-emerald-500' },
+                  { label: 'Wasted', value: wastedCount, suffix: ' keywords', highlight: wastedCount > 0 ? 'text-amber-500' : 'text-slate-400' },
+                  { label: 'Missing', value: missingCount, suffix: ' gaps', highlight: missingCount > 0 ? 'text-red-500' : 'text-slate-400' },
+                ].map((stat, i) => (
+                  <div key={i} className="text-center p-3 bg-slate-50 rounded-xl">
+                    <p className="text-xs text-slate-500 mb-1">{stat.label}</p>
+                    <p className={`text-xl font-bold ${stat.highlight}`}>
+                      {stat.value}<span className="text-slate-400 text-xs font-normal">{stat.suffix}</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Controls */}
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <PlacementLegend />
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => setFilterWasted(!filterWasted)}
+                    className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${filterWasted ? 'bg-amber-500/15 border-amber-500/30 text-amber-500' : 'bg-slate-100 border-slate-200 text-slate-500 hover:text-slate-700'}`}
+                  >
+                    {filterWasted ? '✕ Wasted only' : 'Show wasted only'}
+                  </button>
+                  <select
+                    value={sortBy}
+                    onChange={e => setSortBy(e.target.value)}
+                    className="text-xs px-3 py-1.5 rounded-full border border-slate-200 bg-slate-100 text-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  >
+                    <option value="asoScore">Sort: ASO Score</option>
+                    <option value="placement">Sort: Placement</option>
+                    <option value="wasted">Sort: Wasted first</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Table */}
+              {keywords.length === 0 ? (
+                <div className="text-center py-10 text-slate-400 text-sm">
+                  {rawKeywords.length === 0
+                    ? 'No keyword data available — re-run analysis to generate top keywords.'
+                    : 'No wasted keywords found. Good job!'}
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr className="text-slate-500 uppercase tracking-wider text-xs">
+                        <th className="text-left py-2.5 pl-4 pr-2 font-medium w-8">#</th>
+                        <th className="text-left py-2.5 pr-4 font-medium">Keyword</th>
+                        <th className="text-left py-2.5 pr-4 font-medium w-40">ASO Score</th>
+                        <th className="text-left py-2.5 pr-4 font-medium w-28">Placement</th>
+                        <th className="text-left py-2.5 pr-4 font-medium w-28">Vol / Comp</th>
+                        <th className="text-left py-2.5 pr-4 font-medium w-32 hidden xl:table-cell">Intent</th>
+                        <th className="text-left py-2.5 pr-4 font-medium">Recommendation</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {keywords.map((kw, ki) => (
+                        <KeywordRow key={ki} kw={kw} rank={ki + 1} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </SectionCard>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export default function ReportSection({ report }) {
@@ -1306,6 +1601,7 @@ export default function ReportSection({ report }) {
       case 'screenshots': return <ScreenshotsTab apps={apps} />;
       case 'competitors': return <CompetitorsTab apps={apps} />;
       case 'insights': return <InsightsTab apps={apps} />;
+      case 'keywords': return <TopKeywordsTab apps={apps} />;
       default: return <OverviewTab apps={apps} />;
     }
   };
