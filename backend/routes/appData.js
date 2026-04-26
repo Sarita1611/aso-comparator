@@ -7,6 +7,9 @@ const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 const RAPIDAPI_HOST = 'google-play-store-scraper-api.p.rapidapi.com';
 const RAPIDAPI_BASE = 'https://google-play-store-scraper-api.p.rapidapi.com';
 
+const APPTWEAK_KEY = process.env.APPTWEAK_KEY;
+const APPTWEAK_BASE = 'https://api.apptweak.com';
+
 export const COUNTRY_CODES = {
   'United States': 'us', 'United Kingdom': 'gb', 'India': 'in', 'Canada': 'ca',
   'Australia': 'au', 'Germany': 'de', 'France': 'fr', 'Japan': 'jp',
@@ -42,9 +45,9 @@ function extractAndroidId(url) {
   return match ? match[1] : null;
 }
 
-// ─── iOS functions ────────────────────────────────────────────────────────────
+// ─── iOS Search via iTunes (unchanged — free, no key needed) ──────────────────
 
-async function searchiOSMultiple(query, country = 'us', limit = 6) {
+async function searchiOSMultiple(query, country = 'in', limit = 6) {
   try {
     const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=software&limit=${limit}&country=${country}`;
     const res = await fetch(url);
@@ -67,20 +70,126 @@ async function searchiOSMultiple(query, country = 'us', limit = 6) {
   }
 }
 
-async function fetchiOSById(appId, country = 'us') {
+// ─── iOS Fetch via AppTweak (replaces iTunes lookup) ─────────────────────────
+
+async function fetchiOSById(appId, country = 'in') {
+  if (!APPTWEAK_KEY) {
+    console.error('[AppTweak] APPTWEAK_KEY not set — falling back to iTunes');
+    return fetchiOSByIdFallback(appId, country);
+  }
   try {
+    console.log(`[AppTweak] Fetching iOS metadata for app ${appId} in ${country}`);
+    const url = `${APPTWEAK_BASE}/ios/applications/${appId}/metadata.json?country=${country}&language=en&device=iphone`;
+    const res = await fetch(url, {
+      headers: {
+        'X-Apptweak-Key': APPTWEAK_KEY,
+        'accept': 'application/json',
+      },
+    });
+    const data = await res.json();
+    console.log('[AppTweak] Status:', res.status);
+
+    if (!res.ok || !data.content) {
+      console.warn('[AppTweak] Bad response, falling back to iTunes:', JSON.stringify(data).slice(0, 200));
+      return fetchiOSByIdFallback(appId, country);
+    }
+
+    return formatAppTweakIOSApp(data.content, country);
+  } catch (err) {
+    console.error('[AppTweak] Fetch error, falling back to iTunes:', err.message);
+    return fetchiOSByIdFallback(appId, country);
+  }
+}
+
+// iTunes fallback — used if AppTweak key is missing or API errors
+async function fetchiOSByIdFallback(appId, country = 'in') {
+  try {
+    console.log(`[iTunes fallback] Fetching app ${appId}`);
     const url = `https://itunes.apple.com/lookup?id=${appId}&country=${country}`;
     const res = await fetch(url);
     const data = await res.json();
     if (!data.results || data.results.length === 0) return null;
     return formatIOSApp(data.results[0], country);
   } catch (err) {
-    console.error('iOS fetch error:', err);
+    console.error('[iTunes fallback] Error:', err);
     return null;
   }
 }
 
-function formatIOSApp(app, country = 'us') {
+function formatAppTweakIOSApp(app, country = 'in') {
+  // AppTweak screenshots: { iphone: [{url, id}], ipad: [...], ... }
+  // Try device-specific keys in priority order
+  const screenshotSources =
+    app.screenshots?.iphone6plus ||
+    app.screenshots?.iphone6 ||
+    app.screenshots?.iphone ||
+    app.screenshots?.iphone5 ||
+    [];
+  const screenshotUrls = screenshotSources.map(s => s.url).filter(Boolean);
+
+  // iPad screenshots as bonus
+  const ipadScreenshots =
+    app.screenshots?.ipadPro ||
+    app.screenshots?.ipad ||
+    [];
+  const ipadUrls = ipadScreenshots.map(s => s.url).filter(Boolean);
+
+  const allScreenshots = [...screenshotUrls, ...ipadUrls];
+
+  // Release / update date
+  const rawDate = app.current_version_release_date || app.release_date || null;
+  const releaseDate = rawDate ? new Date(rawDate) : new Date();
+  const daysSinceUpdate = Math.floor((Date.now() - releaseDate.getTime()) / (1000 * 60 * 60 * 24));
+
+  // Icon — AppTweak returns { url, id }
+  const iconUrl = app.icon?.url || app.icon || '';
+
+  // Rating — AppTweak field is `rating` (float)
+  const rating = app.rating ? parseFloat(parseFloat(app.rating).toFixed(1)) : 0;
+
+  // Category — AppTweak returns genre ids; also has a genres array with names sometimes
+  // Use `category` string if present, else first genre name, else empty
+  const category = app.category || (Array.isArray(app.genres) ? app.genres[0] : '') || '';
+
+  // Developer — AppTweak returns `developer` as string
+  const developer = typeof app.developer === 'object'
+    ? (app.developer?.name || '')
+    : (app.developer || '');
+
+  return {
+    platform: 'ios',
+    country,
+    name: app.title || '',
+    developer,
+    icon: iconUrl,
+    rating,
+    ratingCount: app.ratings_count || app.rating_count || 0,
+    category,
+    description: app.description || '',
+    title: app.title || '',
+    subtitle: app.subtitle || '',
+    price: app.price || 'Free',
+    screenshotCount: allScreenshots.length,
+    screenshots: allScreenshots,
+    version: app.version || '',
+    lastUpdated: releaseDate.toISOString().split('T')[0],
+    daysSinceUpdate,
+    size: 'N/A',  // AppTweak does not return file size
+    url: `https://apps.apple.com/${country}/app/id${app.id}`,
+    bundleId: app.bundle_identifier || '',
+    hasVideo: (app.videos && app.videos.length > 0) || false,
+    minOsVersion: app.minimum_os_version || '',
+    languages: app.languages || [],
+    contentRating: app.content_rating || '',
+    appId: String(app.id),
+    // Bonus AppTweak-only fields (used by AI analysis)
+    inAppPurchases: app.features?.in_apps || false,
+    gameCenter: app.features?.game_center || false,
+  };
+}
+
+// iTunes formatter — kept as fallback
+function formatIOSApp(app, country = 'in') {
   const releaseDate = new Date(app.currentVersionReleaseDate || app.releaseDate);
   const daysSinceUpdate = Math.floor((Date.now() - releaseDate.getTime()) / (1000 * 60 * 60 * 24));
   return {
@@ -112,9 +221,8 @@ function formatIOSApp(app, country = 'us') {
   };
 }
 
-// ─── Android via rockapis ─────────────────────────────────────────────────────
+// ─── Android via RapidAPI (completely unchanged) ──────────────────────────────
 
-// rockapis has no direct score field — calculate weighted average from ratingsHistogram
 function getRating(app) {
   const h = app.ratingsHistogram;
   if (h) {
@@ -129,13 +237,12 @@ function getRating(app) {
       return parseFloat((weighted / total).toFixed(1));
     }
   }
-  // fallback in case API adds a score field later
   const val = app.score ?? app.rating ?? null;
   if (val !== null && val !== undefined) return parseFloat(parseFloat(val).toFixed(1));
   return 0;
 }
 
-async function searchAndroidMultiple(query, country = 'us', limit = 6) {
+async function searchAndroidMultiple(query, country = 'in', limit = 6) {
   if (!RAPIDAPI_KEY) {
     console.error('[Android] RAPIDAPI_KEY not set');
     return [];
@@ -173,7 +280,7 @@ async function searchAndroidMultiple(query, country = 'us', limit = 6) {
   }
 }
 
-async function fetchAndroidById(appId, country = 'us') {
+async function fetchAndroidById(appId, country = 'in') {
   if (!RAPIDAPI_KEY) {
     console.error('[Android] RAPIDAPI_KEY not set');
     return null;
@@ -201,7 +308,7 @@ async function fetchAndroidById(appId, country = 'us') {
   }
 }
 
-function formatAndroidApp(app, country = 'us') {
+function formatAndroidApp(app, country = 'in') {
   let daysSinceUpdate = 0;
   if (app.released) {
     const releaseDate = new Date(app.released);
@@ -236,11 +343,11 @@ function formatAndroidApp(app, country = 'us') {
   };
 }
 
-// ─── Routes ───────────────────────────────────────────────────────────────────
+// ─── Routes (completely unchanged) ───────────────────────────────────────────
 
-// AUTOCOMPLETE
+// AUTOCOMPLETE — uses iTunes for iOS, RapidAPI for Android
 router.post('/search', async (req, res) => {
-  const { query, platform = 'both', country = 'us' } = req.body;
+  const { query, platform = 'both', country = 'in' } = req.body;
   if (!query || query.trim().length < 2) return res.json({ results: [] });
 
   try {
@@ -269,9 +376,9 @@ router.post('/search', async (req, res) => {
   }
 });
 
-// FETCH FULL APP
+// FETCH FULL APP — uses AppTweak for iOS, RapidAPI for Android
 router.post('/fetch', async (req, res) => {
-  const { appId, platform, country = 'us', input } = req.body;
+  const { appId, platform, country = 'in', input } = req.body;
 
   try {
     let appData = null;
