@@ -87,8 +87,9 @@ async function fetchiOSById(appId, country = 'in') {
       },
     });
     const data = await res.json();
-    console.log('[AppTweak] Status:', res.status);
-
+    console.log('[AppTweak] Raw screenshots field:', JSON.stringify(data.content?.screenshots));  // ADD THIS
+    console.log('[AppTweak] All content keys:', Object.keys(data.content || {}));                 // ADD THIS
+    console.log('[AppTweak] Status:', res.status);    
     if (!res.ok || !data.content) {
       console.warn('[AppTweak] Bad response, falling back to iTunes:', JSON.stringify(data).slice(0, 200));
       return fetchiOSByIdFallback(appId, country);
