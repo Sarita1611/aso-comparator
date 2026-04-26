@@ -12,28 +12,28 @@ async function request(path, options = {}) {
 
 export const api = {
   // Autocomplete search
-  searchApps: (query, platform = 'both', country = 'us') =>
+  searchApps: (query, platform = 'both', country = 'in') =>
     request('/api/app/search', {
       method: 'POST',
       body: JSON.stringify({ query, platform, country }),
     }),
 
   // Fetch full app data by ID + platform
-  fetchApp: (appId, platform, country = 'us') =>
+  fetchApp: (appId, platform, country = 'in') =>
     request('/api/app/fetch', {
       method: 'POST',
       body: JSON.stringify({ appId, platform, country }),
     }),
 
   // Fetch by raw input (URL or name)
-  fetchAppByInput: (input, country = 'us') =>
+  fetchAppByInput: (input, country = 'in') =>
     request('/api/app/fetch', {
       method: 'POST',
       body: JSON.stringify({ input, country }),
     }),
 
   // Analyze apps (no userId)
-  analyzeApps: (apps, country = 'us') =>
+  analyzeApps: (apps, country = 'in') =>
     request('/api/analyze/compare', {
       method: 'POST',
       body: JSON.stringify({ apps, country }),
