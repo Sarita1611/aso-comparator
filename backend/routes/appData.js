@@ -79,29 +79,30 @@ async function fetchiOSById(appId, country = 'in') {
   }
   try {
     console.log(`[AppTweak] Fetching iOS metadata for app ${appId} in ${country}`);
-    const url = `${APPTWEAK_BASE}/ios/applications/${appId}/metadata.json?country=${country}&language=en&device=iphone`;
+    const url = `https://public-api.apptweak.com/api/public/store/apps/metadata.json?apps=${appId}&country=${country}&language=en&device=iphone`;
     const res = await fetch(url, {
       headers: {
-        'X-Apptweak-Key': APPTWEAK_KEY,
+        'x-apptweak-key': APPTWEAK_KEY,
         'accept': 'application/json',
+        'accept-encoding': 'identity',
       },
     });
     const data = await res.json();
-    console.log('[AppTweak] Raw screenshots field:', JSON.stringify(data.content?.screenshots));  // ADD THIS
-    console.log('[AppTweak] All content keys:', Object.keys(data.content || {}));                 // ADD THIS
-    console.log('[AppTweak] Status:', res.status);    
-    if (!res.ok || !data.content) {
+    console.log('[AppTweak] Status:', res.status);
+
+    const appData = data.result?.[String(appId)]?.metadata;
+
+    if (!res.ok || !appData) {
       console.warn('[AppTweak] Bad response, falling back to iTunes:', JSON.stringify(data).slice(0, 200));
       return fetchiOSByIdFallback(appId, country);
     }
 
-    return formatAppTweakIOSApp(data.content, country);
+    return formatAppTweakIOSApp(appData, country, appId);
   } catch (err) {
     console.error('[AppTweak] Fetch error, falling back to iTunes:', err.message);
     return fetchiOSByIdFallback(appId, country);
   }
 }
-
 // iTunes fallback — used if AppTweak key is missing or API errors
 async function fetchiOSByIdFallback(appId, country = 'in') {
   try {
@@ -117,42 +118,38 @@ async function fetchiOSByIdFallback(appId, country = 'in') {
   }
 }
 
-function formatAppTweakIOSApp(app, country = 'in') {
-  // AppTweak screenshots: { iphone: [{url, id}], ipad: [...], ... }
-  // Try device-specific keys in priority order
+function formatAppTweakIOSApp(app, country = 'in', appId = '') {
+  // Grab first non-empty screenshot array — iphone_d74 is the key AppTweak uses for newer iPhones
   const screenshotSources =
+    app.screenshots?.iphone_d74 ||
+    app.screenshots?.iphone_6_5 ||
     app.screenshots?.iphone6plus ||
     app.screenshots?.iphone6 ||
+    app.screenshots?.iphone_5_8 ||
     app.screenshots?.iphone ||
-    app.screenshots?.iphone5 ||
+    Object.values(app.screenshots || {}).find(arr => Array.isArray(arr) && arr.length > 0) ||
     [];
-  const screenshotUrls = screenshotSources.map(s => s.url).filter(Boolean);
 
-  // iPad screenshots as bonus
   const ipadScreenshots =
+    app.screenshots?.ipadPro_2018 ||
     app.screenshots?.ipadPro ||
     app.screenshots?.ipad ||
     [];
-  const ipadUrls = ipadScreenshots.map(s => s.url).filter(Boolean);
 
+  const screenshotUrls = screenshotSources.map(s => s.url).filter(Boolean);
+  const ipadUrls = ipadScreenshots.map(s => s.url).filter(Boolean);
   const allScreenshots = [...screenshotUrls, ...ipadUrls];
 
-  // Release / update date
-  const rawDate = app.current_version_release_date || app.release_date || null;
+  const rawDate = app.release_date || null;
   const releaseDate = rawDate ? new Date(rawDate) : new Date();
   const daysSinceUpdate = Math.floor((Date.now() - releaseDate.getTime()) / (1000 * 60 * 60 * 24));
 
-  // Icon — AppTweak returns { url, id }
-  const iconUrl = app.icon?.url || app.icon || '';
+  const iconUrl = typeof app.icon === 'object' ? (app.icon?.url || '') : (app.icon || '');
 
-  // Rating — AppTweak field is `rating` (float)
   const rating = app.rating ? parseFloat(parseFloat(app.rating).toFixed(1)) : 0;
 
-  // Category — AppTweak returns genre ids; also has a genres array with names sometimes
-  // Use `category` string if present, else first genre name, else empty
-  const category = app.category || (Array.isArray(app.genres) ? app.genres[0] : '') || '';
+  const category = app.categories?.[0]?.name || app.categories?.[0] || '';
 
-  // Developer — AppTweak returns `developer` as string
   const developer = typeof app.developer === 'object'
     ? (app.developer?.name || '')
     : (app.developer || '');
@@ -164,7 +161,7 @@ function formatAppTweakIOSApp(app, country = 'in') {
     developer,
     icon: iconUrl,
     rating,
-    ratingCount: app.ratings_count || app.rating_count || 0,
+    ratingCount: app.rating?.count || 0,
     category,
     description: app.description || '',
     title: app.title || '',
@@ -172,20 +169,18 @@ function formatAppTweakIOSApp(app, country = 'in') {
     price: app.price || 'Free',
     screenshotCount: allScreenshots.length,
     screenshots: allScreenshots,
-    version: app.version || '',
+    version: app.versions?.current?.name || '',
     lastUpdated: releaseDate.toISOString().split('T')[0],
     daysSinceUpdate,
-    size: 'N/A',  // AppTweak does not return file size
-    url: `https://apps.apple.com/${country}/app/id${app.id}`,
-    bundleId: app.bundle_identifier || '',
+    size: 'N/A',
+    url: `https://apps.apple.com/${country}/app/id${appId}`,
+    bundleId: '',
     hasVideo: (app.videos && app.videos.length > 0) || false,
-    minOsVersion: app.minimum_os_version || '',
-    languages: app.languages || [],
-    contentRating: app.content_rating || '',
-    appId: String(app.id),
-    // Bonus AppTweak-only fields (used by AI analysis)
-    inAppPurchases: app.features?.in_apps || false,
-    gameCenter: app.features?.game_center || false,
+    minOsVersion: '',
+    languages: [],
+    contentRating: '',
+    appId: String(appId),
+    inAppPurchases: app.in_app_purchases || false,
   };
 }
 
