@@ -51,6 +51,19 @@ app.use('/api/history', historyRouter);
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'ASO Comparator API running', timestamp: new Date().toISOString() });
 });
+app.get('/api/test-moneyview', async (req, res) => {
+  const response = await fetch(
+    'https://public-api.apptweak.com/api/public/store/apps/metadata.json?apps=6468976019&country=in&language=en&device=iphone',
+    { headers: { 'x-apptweak-key': process.env.APPTWEAK_KEY, 'accept': 'application/json', 'accept-encoding': 'identity' } }
+  );
+  const data = await response.json();
+  const app = data.result?.['6468976019']?.metadata;
+  res.json({
+    rating: app?.rating,
+    allKeys: Object.keys(app || {})
+  });
+});
+
 
 // 404 handler
 app.use((req, res) => {
