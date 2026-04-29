@@ -162,7 +162,18 @@ function formatAppTweakIOSApp(app, country = 'in', appId = '') {
   // FIX: app.rating is an object { average: 4.9 }, not a float
   const rating = app.rating?.average ? parseFloat(app.rating.average.toFixed(1)) : 0;
 
-  const category = app.categories?.[0]?.name || app.categories?.[0] || '';
+  const APPLE_CATEGORIES = {
+  6000: 'Business', 6001: 'Weather', 6002: 'Utilities', 6003: 'Travel',
+  6004: 'Sports', 6005: 'Social Networking', 6006: 'Reference', 6007: 'Productivity',
+  6008: 'Photo & Video', 6009: 'News', 6010: 'Navigation', 6011: 'Music',
+  6012: 'Lifestyle', 6013: 'Health & Fitness', 6014: 'Games', 6015: 'Finance',
+  6016: 'Entertainment', 6017: 'Education', 6018: 'Books', 6019: 'Medical',
+  6020: 'Food & Drink', 6021: 'Shopping', 6023: 'Developer Tools',
+  6024: 'Graphics & Design', 6025: 'Kids', 6026: 'Stickers',
+};
+
+const categoryId = app.categories?.[0];
+const category = APPLE_CATEGORIES[categoryId] || String(categoryId || '');
 
   const developer = typeof app.developer === 'object'
     ? (app.developer?.name || '')
