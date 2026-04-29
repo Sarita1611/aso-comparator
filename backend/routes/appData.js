@@ -8,7 +8,6 @@ const RAPIDAPI_HOST = 'google-play-store-scraper-api.p.rapidapi.com';
 const RAPIDAPI_BASE = 'https://google-play-store-scraper-api.p.rapidapi.com';
 
 const APPTWEAK_KEY = process.env.APPTWEAK_KEY;
-const APPTWEAK_BASE = 'https://api.apptweak.com';
 
 export const COUNTRY_CODES = {
   'United States': 'us', 'United Kingdom': 'gb', 'India': 'in', 'Canada': 'ca',
@@ -97,12 +96,26 @@ async function fetchiOSById(appId, country = 'in') {
       return fetchiOSByIdFallback(appId, country);
     }
 
-    return formatAppTweakIOSApp(appData, country, appId);
+    const formatted = formatAppTweakIOSApp(appData, country, appId);
+
+    // Enrich with iTunes rating count since AppTweak public API doesn't provide it
+    try {
+      const itunesRes = await fetch(`https://itunes.apple.com/lookup?id=${appId}&country=${country}`);
+      const itunesData = await itunesRes.json();
+      if (itunesData.results?.[0]) {
+        formatted.ratingCount = itunesData.results[0].userRatingCount || 0;
+      }
+    } catch (e) {
+      console.warn('[iTunes] Could not fetch rating count:', e.message);
+    }
+
+    return formatted;
   } catch (err) {
     console.error('[AppTweak] Fetch error, falling back to iTunes:', err.message);
     return fetchiOSByIdFallback(appId, country);
   }
 }
+
 // iTunes fallback — used if AppTweak key is missing or API errors
 async function fetchiOSByIdFallback(appId, country = 'in') {
   try {
@@ -146,7 +159,8 @@ function formatAppTweakIOSApp(app, country = 'in', appId = '') {
 
   const iconUrl = typeof app.icon === 'object' ? (app.icon?.url || '') : (app.icon || '');
 
-  const rating = app.rating ? parseFloat(parseFloat(app.rating).toFixed(1)) : 0;
+  // FIX: app.rating is an object { average: 4.9 }, not a float
+  const rating = app.rating?.average ? parseFloat(app.rating.average.toFixed(1)) : 0;
 
   const category = app.categories?.[0]?.name || app.categories?.[0] || '';
 
@@ -161,7 +175,7 @@ function formatAppTweakIOSApp(app, country = 'in', appId = '') {
     developer,
     icon: iconUrl,
     rating,
-    ratingCount: app.rating?.count || 0,
+    ratingCount: 0, // enriched with iTunes after this function
     category,
     description: app.description || '',
     title: app.title || '',
@@ -339,9 +353,8 @@ function formatAndroidApp(app, country = 'in') {
   };
 }
 
-// ─── Routes (completely unchanged) ───────────────────────────────────────────
+// ─── Routes ───────────────────────────────────────────────────────────────────
 
-// AUTOCOMPLETE — uses iTunes for iOS, RapidAPI for Android
 router.post('/search', async (req, res) => {
   const { query, platform = 'both', country = 'in' } = req.body;
   if (!query || query.trim().length < 2) return res.json({ results: [] });
@@ -372,7 +385,6 @@ router.post('/search', async (req, res) => {
   }
 });
 
-// FETCH FULL APP — uses AppTweak for iOS, RapidAPI for Android
 router.post('/fetch', async (req, res) => {
   const { appId, platform, country = 'in', input } = req.body;
 
@@ -410,7 +422,6 @@ router.post('/fetch', async (req, res) => {
   }
 });
 
-// COUNTRIES LIST
 router.get('/countries', (req, res) => {
   const countries = Object.entries(COUNTRY_CODES)
     .map(([name, code]) => ({ name, code }))
