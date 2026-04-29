@@ -72,7 +72,7 @@ async function searchiOSMultiple(query, country = 'in', limit = 6) {
 // ─── iOS Fetch via AppTweak (replaces iTunes lookup) ─────────────────────────
 
 async function fetchiOSById(appId, country = 'in') {
-  if (!APPTWEAK_KEY) {
+  if (!process.env.APPTWEAK_KEY) {
     console.error('[AppTweak] APPTWEAK_KEY not set — falling back to iTunes');
     return fetchiOSByIdFallback(appId, country);
   }
@@ -81,7 +81,7 @@ async function fetchiOSById(appId, country = 'in') {
     const url = `https://public-api.apptweak.com/api/public/store/apps/metadata.json?apps=${appId}&country=${country}&language=en&device=iphone`;
     const res = await fetch(url, {
       headers: {
-        'x-apptweak-key': APPTWEAK_KEY,
+        'x-apptweak-key': process.env.APPTWEAK_KEY,
         'accept': 'application/json',
         'accept-encoding': 'identity',
       },
