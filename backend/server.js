@@ -58,9 +58,12 @@ app.get('/api/test-moneyview', async (req, res) => {
   );
   const data = await response.json();
   const app = data.result?.['6468976019']?.metadata;
-  res.json({
+ res.json({
     rating: app?.rating,
     categories: app?.categories,
+    title: app?.title,
+    subtitle: app?.subtitle,
+    developer: app?.developer,
     allKeys: Object.keys(app || {})
   });
 });
