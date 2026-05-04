@@ -52,22 +52,21 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'ASO Comparator API running', timestamp: new Date().toISOString() });
 });
 app.get('/api/test-moneyview', async (req, res) => {
-  const response = await fetch(
-    'https://public-api.apptweak.com/api/public/store/apps/metadata.json?apps=6468976019&country=in&language=en&device=iphone',
-    { headers: { 'x-apptweak-key': process.env.APPTWEAK_KEY, 'accept': 'application/json', 'accept-encoding': 'identity' } }
-  );
-  const data = await response.json();
-  const app = data.result?.['6468976019']?.metadata;
- res.json({
-    rating: app?.rating,
-    categories: app?.categories,
-    title: app?.title,
-    subtitle: app?.subtitle,
-    developer: app?.developer,
-    allKeys: Object.keys(app || {})
-  });
+  try {
+    const response = await fetch(
+      'https://public-api.apptweak.com/api/public/store/apps/metadata.json?apps=6468976019&country=in&language=en&device=iphone',
+      { headers: { 'x-apptweak-key': process.env.APPTWEAK_KEY, 'accept': 'application/json', 'accept-encoding': 'identity' } }
+    );
+    const text = await response.text();
+    res.json({
+      status: response.status,
+      keySet: !!process.env.APPTWEAK_KEY,
+      rawResponse: text.slice(0, 1000)
+    });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
 });
-
 
 // 404 handler
 app.use((req, res) => {
